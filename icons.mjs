@@ -1,0 +1,22 @@
+const shapes = {
+ gauge:'<path d="M3 18a10 10 0 1 1 18 0Z"/><path d="m12 14 5-6M5 13h2m1-6 1.5 2M12 4v2"/>',
+ map:'<circle cx="5" cy="17" r="2"/><circle cx="19" cy="5" r="2"/><path d="M5 15v-3a3 3 0 0 1 3-3h8a3 3 0 0 0 3-3"/>',
+ garage:'<path d="m2 8 10-5 10 5M4 8v13h16V8M8 20V11h8v9m-8-6h8m-8 3h8"/>',
+ cargo:'<path d="m2.5 7 9.5-5 9.5 5-9.5 5zm0 0v10l9.5 5 9.5-5V7M12 12v10M7 4.7l9.6 5.1"/>',
+ sound:'<path d="m3 9 4 0 5-4v14l-5-4H3zM16 8a6 6 0 0 1 0 8m3-12a11 11 0 0 1 0 16"/>',
+ mute:'<path d="m3 9 4 0 5-4v14l-5-4H3zM16 9l6 6m0-6-6 6"/>',
+ settings:'<path d="m10 3-.6 2.3-2.1 1.2-2.3-.6-2 3.4 1.7 1.7v2L3 14.7l2 3.4 2.3-.6 2.1 1.2.6 2.3h4l.6-2.3 2.1-1.2 2.3.6 2-3.4-1.7-1.7v-2L21 9.3l-2-3.4-2.3.6-2.1-1.2L14 3z"/><circle cx="12" cy="12" r="3"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ coal:'<path fill="currentColor" stroke="none" d="m2 15 3.2-5.7 5 .3 2.5 6.1-2.4 3.5H3.5zm8.8-6.4 1.7-4.3 4.8-.7 4.2 4.8-1 4.5-5.7.6-2-4.4zm2.2 9.9 1.7-3.3 5.7-.8 2.1 3.9-2.9 2.3h-6.9z"/>',
+ steel:'<path d="m2 14 12-8 8 2-12 8zM2 14v4l8 2 12-8V8m-12 8v4"/><path d="m4 11 10-7 7 1"/>',
+ ticket:'<path d="m3 8 16-5 3 10a2.5 2.5 0 0 0-2 3l-15 5-1-3a2.5 2.5 0 0 0-1.5-5z"/><path d="m14 7 .5 1.5m.6 2 .5 1.5m.6 2 .5 1.5"/>',
+ shovel:'<path d="m14 3 6 5m-6-5c-2 3 0 6 3 6l3-1M15 8l-6 8m-3-4 6 5c-3 5-7 5-10 4 0-4 1-7 4-9Z"/>',
+ train:'<rect x="5" y="3" width="14" height="15" rx="3"/><path d="M5 11h14M12 4v7m-4 7-3 4m11-4 3 4m-12-2h10m-9-6h1m6 0h1"/>',
+ flag:'<path d="M5 21V4c5-4 9 4 15 0v9c-6 4-10-4-15 0"/>',
+ pin:'<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/>',
+ arrow:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
+ book:'<rect x="5" y="3" width="15" height="18" rx="2"/><path d="M8 3v18m3-12h6m-6 4h4"/>',
+ check:'<path d="m4 12 5 5L21 5"/>',
+ path:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v8a4 4 0 0 0 4 4h6M11 5h4a3 3 0 0 1 0 6H9"/>',
+};
+export function icon(name){return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(shapes[name]||'')+'</svg>'}

@@ -1,0 +1,38 @@
+.rail-settings {
+  width: min(425px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  box-sizing: border-box;
+  border: 1px solid #596270;
+  border-radius: 9px;
+  padding: 0;
+  color: #ede9df;
+  background: #18212b;
+  box-shadow: 0 24px 80px #03070ac4;
+  overflow: auto;
+  font-family: inherit;
+}
+.rail-settings::backdrop {background: #080d16c9; backdrop-filter: blur(3px);}
+.rs-head,.rs-line,.rs-actions {display: flex; align-items: center;}
+.rs-head {padding: 18px 23px; justify-content: space-between; border-bottom: 1px solid #394552;}
+.rs-head h2,.rs-body h3,.rs-body p {margin: 0;}
+.rs-head h2 {font-size: 21px; letter-spacing: .04em; color: #f2dfbf;}
+.rs-body {padding: 0 23px 18px;}
+.rs-body h3 {font-size: 15px; color: #f1e8d7;}
+.rs-body p {font-size: 13px; line-height: 1.65; color: #b0bdc8;}
+.rs-line,.rs-block {padding: 18px 0; border-bottom: 1px solid #35414d;}
+.rs-line {justify-content: space-between; gap: 12px;}
+.rs-actions {gap: 8px; flex-wrap: wrap; margin-top: 12px;}
+.rail-settings button {font-family: inherit; font-size: 13px; font-weight: 650; color: #eee5d6; background: #242f3a; border: 1px solid #52606b; border-radius: 5px; padding: 8px 13px; min-height: 40px; cursor: pointer;}
+.rail-settings button:hover {border-color: #dfad72;}
+.rail-settings button:focus-visible {outline: 2px solid #fac380; outline-offset: 2px;}
+.rail-settings .rs-close {font: 26px/1 monospace; padding: 4px; min-width: 40px;}
+.rail-settings .rs-danger {white-space: nowrap; color: #e5b5a0;}
+.rail-settings .rs-primary {background: #efae55; color: #1e1912; border-color: #f7c482;}
+.rail-settings .rs-switch {width: 48px; min-height: 28px; padding: 3px; border-radius: 18px; background: #2c3844;}
+.rs-switch span {display: block; width: 19px; height: 19px; border-radius: 50%; background: #b3bbc2;}
+.rail-settings .rs-switch[aria-checked=true] {background: #4d4936; border-color: #cd9d5c;}
+.rs-switch[aria-checked=true] span {transform: translateX(20px); background: #f3b663;}
+.rs-confirm {background: #25303a; margin-top: 16px; border-left: 2px solid #efae55; padding: 11px 13px;}
+.rs-body .rs-confirm p,.rs-body .rs-feedback {color: #f2c484;}
+.rs-feedback:not(:empty) {padding-top: 12px;}
+.rail-settings [hidden] {display: none !important;}
