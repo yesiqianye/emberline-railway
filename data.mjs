@@ -23,15 +23,18 @@ const stops = [
 export const STOPS = stops.map(([name,description,km,min,coal,steel,fast,haul,order,task],index)=>({
   index,name,description,km,min,coal,steel,fast,haul,order,task,regionIndex:Math.floor(index/3),
 }))
+// Fuel reserved at departure. The returning train brings part of this stock back as cargo.
+export const ROUTE_FUEL = [120,650,2300,4900,7100,9500,12500,14700,16900,19000,21500,24500]
+export const ROUTE_VALUE = {coal:1,steel:40,tickets:100}
 export const GOODS = {coal:'煤炭',steel:'钢材',tickets:'运票'}
 export const UPG = [
-  {id:'shovel',name:'机械供煤机',description:'给锅炉添设自动进煤机构，每级额外产煤 0.12 / 秒。',max:6,from:0,base:[14,4,0]},
-  {id:'mill',name:'车载轧机',description:'利用余热加工钢坯，每级额外产钢 0.055 / 秒。',max:6,from:0,base:[19,5,0]},
-  {id:'boiler',name:'复胀汽缸',description:'回收排汽继续做功，每级提升 3.5% 行车速度。',max:6,from:1,base:[44,20,3]},
-  {id:'yard',name:'联锁调度台',description:'协调沿线货运班次，每级提升 15% 货运线产出。',max:5,from:3,base:[62,26,6]},
+  {id:'shovel',name:'机械供煤机',description:'扩充铲斗，每级每铲多装 3 煤，煤场每秒再增产 0.25 煤。',max:6,from:0,base:[90,4,0]},
+  {id:'mill',name:'车载轧机',description:'利用余热加工钢坯，每级额外产钢 0.055 / 秒。',max:6,from:0,base:[150,5,0]},
+  {id:'boiler',name:'复胀汽缸',description:'回收排汽继续做功，每级提升 3.5% 行车速度。',max:6,from:1,base:[360,20,3]},
+  {id:'yard',name:'联锁调度台',description:'协调沿线货运班次，每级提升 15% 货运线产出。',max:5,from:3,base:[620,26,6]},
 ]
 export const CARS = [
-  {id:'tender',name:'煤水车',description:'增加供煤量，产煤速度提高 30%。',from:0},
+  {id:'tender',name:'煤水车',description:'增加铲煤量与煤场产量，各提高 30%。',from:0},
   {id:'shop',name:'工坊车',description:'行进中也能加工钢件，产钢速度提高 35%。',from:1},
   {id:'cargo',name:'棚式货车',description:'增加装载空间，到站获得的物资和运票增加 45%。',from:2},
   {id:'traction',name:'牵引车',description:'提高 5% 行车速度，在赤铜山脊提升至 15%。',from:3},
@@ -39,10 +42,10 @@ export const CARS = [
   {id:'mail',name:'邮政车',description:'行车途中投递信件，每分钟额外获得 3 张运票。',from:9},
 ]
 export const LINES = [
-  {id:'river',name:'河谷煤运线',description:'从河谷煤场连续调运燃煤。',from:2,base:[42,17,4],rate:[.1,.005,.008]},
-  {id:'ridge',name:'山脊钢材线',description:'从赤铜工坊接收成品钢材。',from:5,base:[88,37,9],rate:[.025,.065,.013]},
-  {id:'snow',name:'高原补给线',description:'为高原聚落供货，获取固定运费。',from:8,base:[126,53,14],rate:[.035,.025,.065]},
-  {id:'coast',name:'海岸联运线',description:'船货换乘铁路，持续补入各类库存。',from:10,base:[151,60,19],rate:[.1,.07,.045]},
+  {id:'river',name:'河谷煤运线',description:'从河谷煤场连续调运燃煤。',from:2,base:[600,17,4],rate:[1.2,.005,.008]},
+  {id:'ridge',name:'山脊钢材线',description:'从赤铜工坊接收成品钢材。',from:5,base:[1800,37,9],rate:[.5,.065,.013]},
+  {id:'snow',name:'高原补给线',description:'为高原聚落供货，获取固定运费。',from:8,base:[2800,53,14],rate:[.7,.025,.065]},
+  {id:'coast',name:'海岸联运线',description:'船货换乘铁路，持续补入各类库存。',from:10,base:[3900,60,19],rate:[1.5,.07,.045]},
 ]
 // Each district has three different dispatch decisions. Cargo varies by dispatch type.
 export const INCIDENTS = [

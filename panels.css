@@ -138,3 +138,45 @@
 .erp-route-terms .erp-cost { margin:0; }
 .erp-fork-bottom { justify-content:flex-end; }
 .erp .erp-depart-reason { display:block; margin-top:5px; color:#d4b589; }
+.erp .erp-economy-note { margin: -6px 20px 16px; font-size: 12px; }
+.erp-enroute { grid-template-columns: minmax(0,1fr); }
+.erp-fork-bottom { align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.erp-fork-bottom .erp-delta { flex: 1 1 160px; color: #e0c39b; }
+.erp-speed { margin-left: 8px; font-size: 11px; color: var(--erp-mint); white-space: nowrap; }
+.erp-net { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.erp-net span { white-space: nowrap; }
+.erp-gain { color: var(--erp-mint); }
+.erp-operations { scroll-margin-block-start: 12px; min-width: 0; }
+.erp-operations:focus-visible { outline: 2px solid var(--erp-brass); outline-offset: 3px; }
+.erp-op-block { padding: 16px 20px; }
+.erp-op-block + .erp-op-block { border-top: 1px solid var(--erp-line); }
+.erp-op-block > h4 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 5px; }
+.erp-op-block h4 .erp-icon { width: 16px; height: 16px; color: var(--erp-brass); }
+.erp-op-block h4 small { margin-left: auto; color: var(--erp-mint); font-weight: 500; }
+.erp-op-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%,176px), 1fr)); gap: 12px; margin-top: 11px; }
+.erp-op-choice { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; padding-left: 11px; border-left: 2px solid #43505e; }
+.erp-op-choice .erp-btn { align-self: flex-start; margin-top: auto; }
+.erp-op-choice small { display: block; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.erp-op-choice small.erp-op-disabled { color: #bfaa89; }
+.erp-op-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 9px 0; }
+.erp-op-progress progress { appearance: none; border: none; border-radius: 2px; background: var(--erp-line); width: min(100%,220px); height: 6px; }
+.erp-op-progress progress::-webkit-progress-bar { background: var(--erp-line); }
+.erp-op-progress progress::-webkit-progress-value { background: var(--erp-mint); }
+.erp-op-progress progress::-moz-progress-bar { background: var(--erp-mint); }
+.erp-op-block .erp-op-instruction { color: var(--erp-paper); margin-top: 10px; }
+.erp-compact .erp-op-block { padding: 13px 16px; }
+.erp-compact .erp-op-choices { gap: 8px; }
+@media (max-width: 580px) {
+  .erp .erp-economy-note { margin: 0 13px 14px; }
+  .erp-op-block, .erp-compact .erp-op-block { padding: 13px; }
+  .erp-op-choices { grid-template-columns: 1fr; }
+  .erp-op-choice { display: grid; grid-template-columns: minmax(0,1fr) minmax(90px,auto); align-items: center; column-gap: 8px; min-height: 44px; }
+  .erp-op-choice .erp-btn { grid-column: 2; grid-row: 1 / span 3; align-self: center; margin: 0; max-width: 150px; }
+  .erp-op-choice p, .erp-op-choice small { grid-column: 1; }
+}
+
+.erp-dispatch-service {display:flex;align-items:center;justify-content:space-between;gap:12px}
+.erp-dispatch-service button {flex:none}
+@media(max-width:420px) {
+  .erp-dispatch-service {align-items:flex-start;flex-wrap:wrap}
+}

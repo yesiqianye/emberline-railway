@@ -42,6 +42,54 @@ function title(symbol, name, note = '') {
   return '<div class="erp-heading">' + icon(symbol) + '<h3>' + name + '</h3>' + (note ? '<span class="erp-hnote">' + escape(note) + '</span>' : '') + '</div>';
 }
 
+function duration(seconds) {
+  const whole = Math.max(0, Math.ceil(seconds));
+  return String(Math.floor(whole / 60)).padStart(2, '0') + '分' +
+    String(whole % 60).padStart(2, '0') + '秒';
+}
+
+function routeEconomy(route) {
+  return Object.keys(resNames).map(key => {
+    const rounded = Math.round(route.netPerMinute[key] * 10) / 10;
+    const signed = rounded > 0 ? '+' + numbers.format(rounded) : numbers.format(rounded);
+    return '<span class="' + (rounded > 0 ? 'erp-gain' : '') + '">' +
+      escape(resNames[key]) + ' ' + signed + '</span>';
+  }).join('');
+}
+
+function routeDifference(route, other) {
+  if (!other) return '';
+  const delta = route.total - other.total;
+  let deltaGoods = [];
+  if (route.id === 'haul') {
+    for (const key of ['coal', 'steel']) {
+      const gain = route.net[key] - other.net[key];
+      if (gain > 0) deltaGoods.push(numbers.format(gain) + ' ' + resNames[key]);
+    }
+  }
+  const ticketAdvantage = route.netPerMinute.tickets - other.netPerMinute.tickets;
+  const parts = [];
+  if (delta) parts.push('比另一线' + (delta < 0 ? '快 ' : '慢 ') + duration(Math.abs(delta)));
+  if (deltaGoods.length) parts.push('每趟净增 ' + deltaGoods.join('、'));
+  else if (ticketAdvantage > .05) parts.push('每分多得 ' + numbers.format(ticketAdvantage) + ' 运票');
+  return parts.join(' · ');
+}
+
+function routeCard(route, other, moving) {
+  const assigned = moving && route.selected;
+  const note = moving ? '发车时锁定的区间计划' : routeDifference(route, other);
+  return '<div class="erp-fork ' + (route.selected ? 'is-picked' : '') + '">' +
+    '<div><span class="erp-letter">' + (route.id === 'fast' ? 'A' : 'B') + '</span><strong>' + escape(route.name) +
+    '</strong><span class="erp-hnote">' + (route.id === 'fast' ? '正线' : '货运支线') + '</span></div>' +
+    '<p>' + escape(route.description) + '</p>' +
+    '<dl class="erp-route-terms"><dt>计划时长</dt><dd>' + duration(route.total) +
+    (route.speedBonus ? '<span class="erp-speed">车速 +' + numbers.format(route.speedBonus) + '%</span>' : '') +
+    '</dd><dt>发车物资</dt><dd>' + costLine(route.cost) + '</dd><dt>到站收获</dt><dd>' + costLine(route.award) +
+    '</dd><dt>每分净得</dt><dd class="erp-net">' + routeEconomy(route) + '</dd></dl>' +
+    '<div class="erp-fork-bottom"><small class="erp-delta">' + escape(note) + '</small>' +
+    actionButton(route.action, '', assigned ? '行驶中' : route.selected ? '已选路线' : undefined) + '</div></div>';
+}
+
 function mapPanel(v) {
   const { leg, regions, stations, routes } = v;
   const arrived = leg.stopsDone ?? stations.filter(s => s.status === 'done' || s.status === 'current').length;
@@ -63,9 +111,9 @@ function mapPanel(v) {
       '<div class="erp-trip"><div><h4>' + escape(v.station.name) + '<span class="erp-track-arrow" aria-hidden="true">→</span>' + escape(leg.destination) + '</h4>' +
       '<p>' + escape(leg.description) + '</p>' + (!leg.traveling && !v.actions.depart.enabled ? '<small class="erp-depart-reason">' + escape(v.actions.depart.reason) + '</small>':'') + '</div>' + actionButton(v.actions.depart, 'erp-primary') + '</div>' +
       (leg.traveling ? '<div class="erp-journey"><div><span>' + escape(selectedRoute?.name || '行驶进度') + '</span><span>' + Math.floor(progress) + '%</span></div><progress max="100" value="' + progress + '"></progress></div>' : '') +
-      (routes.length ? '<div class="erp-forks">' + routes.map((r, i) => '<div class="erp-fork ' + (r.selected ? 'is-picked' : '') + '">' +
-        '<div><span class="erp-letter">' + (i===0 ? 'A':'B') + '</span><strong>' + escape(r.name) + '</strong></div><p>' + escape(r.description) + '</p>' +
-        '<dl class="erp-route-terms"><dt>行程</dt><dd>' + Math.ceil(r.total/60) + ' 分钟</dd><dt>发车物资</dt><dd>' + costLine(r.cost) + '</dd><dt>到站收获</dt><dd>' + costLine(r.award) + '</dd></dl><div class="erp-fork-bottom">' + actionButton(r.action, '', r.selected ? '已选路线' : undefined) + '</div></div>').join('') + '</div>' : '') + '</section>';
+      '<div class="erp-forks' + (leg.traveling ? ' erp-enroute' : '') + '">' +
+      (leg.traveling ? routes.filter(r => r.selected) : routes).map(r => routeCard(r, routes.find(other => other.id !== r.id), leg.traveling)).join('') +
+      '</div><p class="erp-economy-note">每分净得按到站收获减去发车物资，再除以计划时长计算。</p>'  + '</section>';
   }
   return '<div class="erp">' + dispatch + '<section class="erp-box">' + title('track','全线站点', arrived + ' / ' + stations.length + ' 站') + '<p class="erp-maprule">' + escape(v.region.rule) + '</p><div class="erp-map">' + regionMap + '</div></section></div>';
 }
@@ -95,16 +143,57 @@ function garagePanel(v) {
   return '<div class="erp erp-two">' + consist + upgrades + '</div>';
 }
 
+function operationChoices(actions, compact) {
+  if (!actions.length) return '';
+  return '<div class="erp-op-choices">' + actions.map(a => '<div class="erp-op-choice">' +
+    (a.description && !compact ? '<p>' + escape(a.description) + '</p>' : '') +
+    (a.info ? '<small>' + escape(a.info) + '</small>' : '') + actionButton(a) +
+    (a.reason && !a.enabled ? '<small class="erp-op-disabled">' + escape(a.reason) + '</small>' : '') +
+    '</div>').join('') + '</div>';
+}
+
+function pendingSignal(signals) {
+  if (!signals.length) return '';
+  const event = signals[0];
+  const name = event.name.split(' · ')[0];
+  return '<div class="erp-op-block erp-live-event"><h4>' + icon('signal') + escape(name) +
+    '<small>沿途信号</small></h4><p>' + escape(event.description) +
+    '</p><div class="erp-op-choices">' + signals.map(c => '<div class="erp-op-choice"><small>' + escape(c.info) +
+    '</small>' + actionButton(c.action) + '</div>').join('') + '</div></div>';
+}
+
+export function renderOperations(v, {compact = false} = {}) {
+  const ops = v.operations;
+  const signals = v.contracts.filter(c => c.kind === 'signal');
+  if (!ops && !signals.length) return '';
+  const phase = ops?.phase;
+  const waiting = phase === 'working';
+  const market = ops?.market || [];
+  const job = ops && phase !== 'station' ? '<div class="erp-op-block' + (phase === 'ready' ? ' erp-live-event' : '') +
+    '"><h4>' + icon('tools') + escape(ops.title) + '</h4><p>' + escape(ops.description) + '</p>' +
+    (waiting ? '<div class="erp-op-progress"><progress aria-label="作业进度" value="' +
+      Math.max(0, ops.duration - ops.remaining) + '" max="' + ops.duration + '"></progress><small>剩余 ' + duration(ops.remaining) + '</small></div>' : '') +
+    (ops.instruction ? '<p class="erp-op-instruction">' + escape(ops.instruction) + '</p>' : '') +
+    operationChoices(ops.actions || [], compact) + '</div>' : '';
+  const shop = market.length ? '<div class="erp-op-block"><h4>' + icon('ticket') + '站内采购</h4>' +
+    (phase === 'station' && ops.description ? '<p>' + escape(ops.description) + '</p>' : '') +
+    operationChoices(market, compact) + '</div>' : '';
+  const pass = v.priorityPass;
+  const priority = pass ? '<div class="erp-op-block"><h4>' + icon('signal') + '优先通行</h4>' +
+    '<div class="erp-dispatch-service"><p>' + escape(pass.used ? '本程已购买优先通行。' : pass.info + (pass.reason ? ' · ' + pass.reason : '')) + '</p>' +
+    actionButton(pass) + '</div></div>' : '';
+  const body = pendingSignal(signals) + job + priority + shop;
+  if (!body) return '';
+  return '<section id="rail-operations" tabindex="-1" class="erp erp-operations' + (compact ? ' erp-compact' : '') + '">' +
+    '<div class="erp-box">' + title('junction','调度作业') + body + '</div></section>';
+}
+
 function freightPanel(v) {
   const stationOrders = v.contracts.filter(c => c.kind !== 'signal');
-  const signals = v.contracts.filter(c => c.kind === 'signal');
   const done = stationOrders.filter(c => c.completed).length;
   const current = stationOrders.filter(c => c.unlocked && !c.completed);
   const upcoming = stationOrders.find(c => !c.unlocked && !c.completed);
   const shown = [...current, ...(upcoming ? [upcoming] : [])];
-  const signalBox = signals.length ? '<section class="erp-box erp-signal">' + title('signal', '沿途信号') +
-    signals.map(c => '<div class="erp-row"><div class="erp-rowbody"><h4>' + escape(c.name) + '</h4><p>' + escape(c.description) +
-    '</p><small>' + escape(c.info) + '</small></div>' + actionButton(c.action) + '</div>').join('') + '</section>' : '';
   const contracts = '<section class="erp-box">' + title('ticket','车站委托', done + ' / ' + stationOrders.length + ' 已交付') +
     '<div class="erp-items">' + shown.map(c => '<div class="erp-row' + (c.unlocked===false ? ' erp-locked' : '') + '"><span class="erp-item-icon">' +
       icon(c.unlocked===false?'lock':'ticket') + '</span><div class="erp-rowbody"><h4>' + escape(c.name) + '</h4><p>' + escape(c.description) +
@@ -113,7 +202,7 @@ function freightPanel(v) {
   const freight = '<section class="erp-box">' + title('cargo','常设货运线') + '<div class="erp-items">' + v.freights.map(f => '<div class="erp-row' + (f.unlocked===false?' erp-locked':'') + '"><span class="erp-item-icon ' + (f.level?'is-active':'') + '">' +
     icon(f.unlocked===false?'lock':'cargo') + '</span><div class="erp-rowbody"><h4>' + escape(f.name) + (f.level ? '<span class="erp-level">Lv. ' + escape(f.level) + ' / ' + escape(f.max) + '</span>':'') + '</h4>' +
     '<p>' + escape(f.description) + '</p>' + (f.info?'<small>' + escape(f.info.includes('+') ? f.info.slice(f.info.indexOf('+')) : f.info) + '</small>':'') + (f.level<f.max ? costLine(f.cost):'') + lockedReason(f) + '</div>' + actionButton(f.action) + '</div>').join('') + '</div></section>';
-  return '<div class="erp">' + signalBox + '<div class="erp erp-two">' + contracts + freight + '</div></div>';
+  return '<div class="erp">' + renderOperations(v) + '<div class="erp erp-two">' + contracts + freight + '</div></div>';
 }
 
 export function renderPanel(tab, v) {

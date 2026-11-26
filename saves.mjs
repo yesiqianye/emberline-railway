@@ -1,4 +1,4 @@
-import { newGame, restore } from './engine.mjs';
+import { newGame, restore } from './engine.mjs?v=2';
 
 const KEY = 'emberline.railway.save.v1';
 const BACKUP = KEY + '.previous';
