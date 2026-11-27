@@ -31,8 +31,10 @@ function railwayUses(v) {
   const { available, projects } = v.railworks;
   const blueprintNote = projects.every(p => p.level === p.max)
     ? '三项铁路工程均已完全安装' : '可用 ' + format(available) + ' 张 · 在车库安装永久改装';
+  const repair = v.railworks.repair;
+  const partsNote = '本程快修需第 ' + repair.requiredGeneration + ' 代及以上 · ' + format(repair.cost) + ' 机件';
   return '<div class="ws-uses"><div>' + icon('cargo') +
-    '<div><strong>机件上车</strong><span>' + (v.finished ? '海湾环运班列可持续托运与快修' : '托运备件赚运票，途中快修缩短行程') +
+    '<div><strong>托运与快修</strong><span>' + partsNote +
     '</span></div><a class="ws-link" href="#cab" data-rail-focus="rail-dispatch">去驾驶台' + icon('arrow') + '</a></div>' +
     '<div>' + icon('book') + '<div><strong>铁路蓝图</strong><span>' + blueprintNote + '</span></div>' +
     garageLink('去车库') + '</div></div>';
@@ -69,7 +71,7 @@ export function renderWorkshopSummary(v) {
   const visibleTiers = w.tiers.slice(0, Math.min(3, activeStage + (w.tiers[0].purchased > 0 ? 1 : 0)));
   return '<section class="ws ws-summary" aria-labelledby="ws-cab-title"><header class="ws-head"><h2 id="ws-cab-title">' +
     icon('garage') + '车载工坊</h2><a href="#workshop">进入工坊 ' + icon('arrow') + '</a></header>' +
-    '<div class="ws-summary-content"><div class="ws-account"><span>机件库存</span><b>' + format(w.parts) +
+    '<div class="ws-summary-content"><div class="ws-account"><span>机件库存 · 第 ' + w.generation + ' 代</span><b>' + format(w.parts) +
     '</b><small>+' + format(w.perSecond) + ' 机件 / 秒</small><a class="ws-link" href="#cab" data-rail-focus="rail-dispatch">托运 / 快修 ' + icon('arrow') + '</a></div><div class="ws-quick-list">' +
     visibleTiers.map(tier => quickPurchase(tier,w)).join('') + '</div></div>' + milestoneMeter(w) + '</section>';
 }
@@ -122,9 +124,9 @@ function generations(v, confirm) {
       ' 机件即可换代，获得一张永久蓝图。' : esc(p.reason);
     return '<section class="ws-card ws-generation"><header class="ws-head"><h2>' + icon('book') +
       '蓝图换代</h2><span>第 ' + w.generation + ' 代</span></header><div class="ws-generation-body">' +
-      ledger + '<p>' + unlock + (w.generation === 1 ? ' 第 2 代开放行车快修。' : '') + '</p>' + engineering + '</div></section>';
+      ledger + '<p>' + unlock + (p.nextGainTarget ? ' 下代生产' + esc(p.nextGrade) + '。' : '') + '</p>' + engineering + '</div></section>';
   }
-  const preview = '<div class="ws-effects"><h3>换代后</h3><dl><div><dt>工坊起步倍率</dt><dd>×' +
+  const preview = '<div class="ws-effects"><h3>换代后生产' + esc(p.nextGrade) + '</h3><dl><div><dt>工坊起步倍率</dt><dd>×' +
     format(p.afterMultiplier) + '</dd></div><div><dt>可用于铁路改装</dt><dd>' + format(v.railworks.available + p.gain) +
     ' 张</dd></div><div><dt>煤钢产量倍率</dt><dd>×' + format(p.afterRailMultiplier) +
     '</dd></div><div><dt>下次发车速度加成</dt><dd>+' + format(p.trainSpeedPercentAfter) + '%</dd></div></dl></div>';
@@ -148,7 +150,7 @@ export function renderWorkshop(v, {quantity = '1', confirmPrestige = false} = {}
   const captions = ['车床工位','装配车间','自动生产线'];
   return '<div class="ws ws-page"><section class="ws-card"><div class="ws-art"><img src="./art/workshop-' +
     level + '.webp" alt="' + captions[level-1] + '"><div class="ws-art-text"><span>第 ' + w.generation +
-    ' 代工坊</span><h2>' + captions[level-1] + '</h2></div></div>' +
+    ' 代工坊 · ' + esc(w.partGrade) + '</span><h2>' + captions[level-1] + '</h2></div></div>' +
     '<dl class="ws-figures"><div><dt>机件库存</dt><dd>' + format(w.parts) + '</dd></div><div><dt>机件 / 秒</dt><dd>+' +
     format(w.perSecond) + '</dd></div><div><dt>工坊产量倍率</dt><dd>×' + format(w.multiplier) +
     '</dd></div></dl>' + railwayUses(v) + '<p class="ws-rail">' + icon('train') + '煤钢产量 ×' + format(w.railMultiplier) + ' · 发车速度 +' + format(w.trainSpeedPercent) + '% · 每开通一站，工坊基础产速增加 8%。</p></section><section class="ws-card"><header class="ws-head"><h2>' + icon('garage') +

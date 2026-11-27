@@ -90,7 +90,7 @@ test('v3 blueprints immediately fund real projects without losing booked fares, 
   const old = v3Save();
   const s = reload(old);
   const baseline = view(s);
-  assert.equal(s.version, 5);
+  assert.equal(s.version, 6);
   assert.deepEqual(s.workshop, old.workshop);
   assert.deepEqual(s.stock, old.stock);
   assert.equal(rail(s).available, 7);
@@ -182,13 +182,15 @@ test('the first prestige unlocks one parts repair per leg; a late repair settles
 });
 
 test('blueprint spending is bounded, permanent through prestige, and independent of the workshop threshold', () => {
-  const s = reload(v3Save());
+  const old=v3Save();
+  Object.assign(old.workshop,{blueprints:122,parts:1e9,earned:6e9,lifetime:7e9});
+  const s=reload(old);
   const before = view(s).workshop.prestige.threshold;
-  for (const cost of [1, 2, 3]) {
+  for (const cost of [1,3,9,27,81]) {
     assert.equal(project(s, 'nozzle').cost, cost);
     use(s, 'railworks', 'nozzle');
   }
-  assert.equal(project(s, 'nozzle').level, 3);
+  assert.equal(project(s, 'nozzle').level, 5);
   assert.equal(rail(s).available, 1);
   reject(s, 'nozzle');
   use(s, 'railworks', 'rack');
@@ -196,10 +198,6 @@ test('blueprint spending is bounded, permanent through prestige, and independent
   reject(s, 'arm');
   assert.equal(view(s).workshop.prestige.threshold, before);
 
-  use(s, 'workshop', 'buy:lathe:1');
-  advance(s, s.last + hour);
-  use(s, 'workshop', 'buy:assembly:1');
-  advance(s, s.last + 8 * hour);
   use(s, 'railworks', 'cargo');
   const tickets = rail(s).cargo.tickets;
   const gain = view(s).workshop.prestige.gain;
@@ -207,24 +205,23 @@ test('blueprint spending is bounded, permanent through prestige, and independent
   use(s, 'workshop', 'prestige');
   const continued = reload(s);
   assert.equal(rail(continued).available, gain);
-  assert.equal(rail(continued).blueprints, 7 + gain);
-  assert.equal(project(continued, 'nozzle').level, 3);
+  assert.equal(rail(continued).blueprints, 122 + gain);
+  assert.equal(project(continued, 'nozzle').level, 5);
   assert.equal(project(continued, 'rack').level, 1);
   assert.equal(rail(continued).cargo.loaded, true);
   assert.equal(rail(continued).cargo.tickets, tickets);
   reject(continued, 'cargo');
 });
 
-test('mainline arrivals and the twelfth-station crate pay once and open circuit service', () => {
+test('the twelfth-station crate pays once and the bay becomes a junction with an extension', () => {
   const s = newGame(start);
-  while (!view(s).finished) {
+  while (s.stops<12) {
     advance(s, s.last + 8 * hour);
     if (s.stops === 0) {
       use(s, 'workshop', 'buy:lathe:1');
       use(s, 'workshop', 'buy:assembly:1');
     }
-    const final = s.stops === view(s).stations.length - 1;
-    if (final) use(s, 'railworks', 'cargo');
+    if (s.stops===11) use(s,'railworks','cargo');
     use(s, 'depart');
     const fare = view(s).leg.award.tickets;
     const expected = s.stock.tickets + view(s).rates.tickets * s.trip.left + fare;
@@ -233,7 +230,10 @@ test('mainline arrivals and the twelfth-station crate pay once and open circuit 
   }
   assert.equal(rail(s).cargo.loaded, false);
   assert.equal(rail(s).circuits, 0);
-  assert.equal(view(s).leg.circuit, true);
+  assert.equal(view(s).finished,false);
+  assert.equal(view(s).leg.circuit,false);
+  assert.equal(view(s).leg.destination,'云帆码头');
+  assert.ok(view(s).actions.service.enabled);
   assert.ok(rail(s).cargo.action.enabled);
   reject(s, 'repair');
 });
@@ -250,8 +250,9 @@ test('a finished v3 railway can book repeat circuits; arrival pays once and keep
       blueprints:0, generation:1, bestLathe:1},
   });
   const s = reload(old);
-  assert.ok(view(s).finished);
+  assert.equal(view(s).finished,false);
   assert.equal(rail(s).circuits, 0);
+  use(s,'service');
   assert.ok(view(s).leg.circuit);
   assert.equal(view(s).leg.total, 360);
   use(s, 'railworks', 'cargo');
@@ -263,14 +264,14 @@ test('a finished v3 railway can book repeat circuits; arrival pays once and keep
   close(ready.stock.coal, coalBefore - route.cost.coal);
   reject(ready,'repair');
   const returning = reload(ready);
-  assert.ok(view(returning).finished && view(returning).leg.traveling);
+  assert.ok(view(returning).leg.circuit && view(returning).leg.traveling);
   reject(returning, 'repair');
   reject(returning, 'cargo');
 
   const due = returning.trip.left;
   const expected = returning.stock.tickets + view(returning).rates.tickets * due + route.award.tickets;
   const home = reload(returning, returning.last + Math.round(due * 1000));
-  assert.ok(view(home).finished);
+  assert.ok(view(home).leg.circuit);
   assert.equal(home.stops, 12);
   assert.equal(home.trip, null);
   assert.equal(rail(home).circuits, 1);
@@ -284,6 +285,8 @@ test('a finished v3 railway can book repeat circuits; arrival pays once and keep
   advance(again, again.last + again.trip.left * 1000);
   assert.equal(again.stops, 12);
   assert.equal(rail(again).circuits, 2);
+  use(again,'service');
+  assert.equal(view(again).leg.destination,'云帆码头');
 });
 
 test('surplus blueprints increase repeat freight fares, with each paid crate locked to its loading quote', () => {
@@ -291,6 +294,7 @@ test('surplus blueprints increase repeat freight fares, with each paid crate loc
   Object.assign(old, {stops:12, trip:null});
   Object.assign(old.workshop, {blueprints:19, parts:2e7, earned:1e9, lifetime:2e9});
   const s = reload(old);
+  use(s,'service');
   const quote = rail(s).cargo;
   assert.equal(quote.blueprintPremium, 1);
   assert.equal(quote.tickets, 20);
@@ -305,4 +309,69 @@ test('surplus blueprints increase repeat freight fares, with each paid crate loc
   const home = reload(s, s.last + s.trip.total * 1000);
   close(home.stock.tickets, expected);
   assert.equal(rail(home).cargo.tickets, 19 + s.workshop.blueprints - 18);
+});
+
+test('a v5 bay shipment keeps the paid fare, old upgrade costs and the in-flight circuit on migration', () => {
+  const old=v3Save();
+  Object.assign(old,{version:5,stops:12,ops:{serial:0,job:null}});
+  old.railworks={levels:{nozzle:3,rack:0,arm:1},cargo:{stop:12,tickets:19},repairUsed:true,circuits:2};
+  old.workshop.blueprints=10;
+  const s=reload(old);
+  assert.equal(s.circuit,true);
+  assert.equal(view(s).leg.destination,'曙光总站');
+  assert.deepEqual(s.trip,old.trip);
+  assert.equal(rail(s).spent,7);
+  assert.equal(rail(s).available,3);
+  assert.equal(project(s,'nozzle').cost,27);
+  assert.equal(project(s,'arm').cost,3);
+  use(s,'railworks','arm');
+  const loaded=reload(s);
+  assert.equal(rail(loaded).spent,10);
+  assert.equal(rail(loaded).available,0);
+  reject(loaded,'repair');
+  assert.equal(act(loaded,'service',null,loaded.last).ok,false);
+
+  const expected=loaded.stock.tickets+view(loaded).rates.tickets*loaded.trip.left+loaded.trip.award.tickets+19;
+  const home=reload(loaded,loaded.last+loaded.trip.left*1000);
+  assert.equal(home.stops,12);
+  assert.equal(rail(home).circuits,3);
+  close(home.stock.tickets,expected);
+  use(home,'service');
+  assert.equal(view(home).leg.destination,'云帆码头');
+
+  old.trip=null;
+  old.railworks.repairUsed=false;
+  const prepared=reload(old);
+  assert.equal(prepared.circuit,true);
+  assert.equal(act(prepared,'service',null,prepared.last).ok,false);
+  assert.equal(rail(prepared).cargo.tickets,19);
+});
+
+test('quick repairs independently require the specified generation and price through station 30', () => {
+  let previous=0;
+  for(const stops of [0,3,6,9,12,15,18,21,24,27,29]) {
+    const s=newGame(start);
+    s.stops=stops;
+    s.stock={coal:1e6,steel:1e5,tickets:1000};
+    const requirement=Math.floor(stops/3)+2;
+    const price=rail(s).repair.cost;
+    assert.ok(price>previous);
+    previous=price;
+    assert.equal(rail(s).repair.requiredGeneration,requirement);
+    s.workshop.generation=requirement-1;
+    s.workshop.parts=price*2;
+    use(s,'depart');
+    reject(s,'repair');
+    s.workshop.generation=requirement;
+    s.workshop.parts=price-1;
+    reject(s,'repair');
+    s.workshop.parts=price;
+    const left=s.trip.left;
+    const repair=rail(s).repair;
+    use(s,'railworks','repair');
+    assert.equal(s.workshop.parts,0);
+    close(s.trip.left,left-repair.saved);
+    reject(reload(s),'repair');
+  }
+  assert.equal(previous,650000000);
 });

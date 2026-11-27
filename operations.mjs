@@ -1,4 +1,4 @@
-import { GOODS, ROUTE_FUEL, STOPS } from './data.mjs?v=5'
+import { GOODS, REGIONS, ROUTE_FUEL, STOPS, STOPS_PER_REGION } from './data.mjs?v=6'
 
 const blankCost = () => ({coal:0, steel:0, tickets:0})
 const load = (coal=0, steel=0, tickets=0) => ({coal, steel, tickets})
@@ -7,18 +7,22 @@ const describe = amount => Object.keys(GOODS).filter(key => amount[key] > 0).map
 // Prices and settlements are determined by the dispatch station, even if the
 // train arrives before the work is settled.
 const work = [
-  { names:['分拣河港邮袋','转运矿区快件','分拣暖棚邮袋','转运船期急件'], seconds:34, coal:95, steel:3, tickets:5, steelSeconds:24, ticketSeconds:52,
+  { names:['分拣河港邮袋','转运矿区快件','分拣暖棚邮袋','转运船期急件'], extraName:'分拣快件', seconds:34, coal:95, steel:3, tickets:5, steelSeconds:24, ticketSeconds:52,
     brief:'给短途货件配车。回款快，留货可换取少量钢材。' },
-  { names:['回炉旧桥钢件','轧制矿用钢轨','锻造防雪扣件','铸造码头吊钩'], seconds:64, coal:430, steel:17, tickets:7, steelSeconds:56, ticketSeconds:30,
+  { names:['回炉旧桥钢件','轧制矿用钢轨','锻造防雪扣件','铸造码头吊钩'], extraName:'轧制接轨钢件', seconds:64, coal:430, steel:17, tickets:7, steelSeconds:56, ticketSeconds:30,
     brief:'用锅炉余热和燃煤开动小轧机。适合补充钢材。' },
-  { names:['整理渡口货垛','编组矿石敞车','换装林场木材','拆分远洋船货'], seconds:49, coal:260, steel:8, tickets:12, steelSeconds:36, ticketSeconds:56,
+  { names:['整理渡口货垛','编组矿石敞车','换装林场木材','拆分远洋船货'], extraName:'换装整车货物', seconds:49, coal:260, steel:8, tickets:12, steelSeconds:36, ticketSeconds:56,
     brief:'按货主的清单重新编组整批货车。交付可获得较高运费。' },
-  { names:['承包河谷修桥料','承包隧道铆件','承包冰湖护栏','承包港区栈桥料'], seconds:54, coal:190, deposit:true, steel:23, tickets:14, steelSeconds:60, ticketSeconds:64,
+  { names:['承包河谷修桥料','承包隧道铆件','承包冰湖护栏','承包港区栈桥料'], extraName:'承包沿线工程料', seconds:54, coal:190, deposit:true, steel:23, tickets:14, steelSeconds:60, ticketSeconds:64,
     brief:'预付承包费押下这批工程料，可把成品留给机务段。' },
 ]
 
 function jobAward(rate,ratedSeconds) {
   return Math.max(1,Math.floor(rate*ratedSeconds))
+}
+function jobName(spec,stop) {
+  const region=STOPS[stop].regionIndex
+  return spec.names[region] ?? REGIONS[region].name+' · '+spec.extraName
 }
 
 export function newOperations() { return {serial:0,job:null} }
@@ -65,12 +69,14 @@ function option(s, kind, id, label, description, info, cost=blankCost(), gain=bl
 function market(s) {
   if(s.trip) return []
   const next=STOPS[Math.min(s.stops,STOPS.length-1)]
-  const tier=Math.floor(Math.max(0,s.stops-1)/3)
+  const tier=Math.floor(Math.max(0,s.stops-1)/STOPS_PER_REGION)
+  const steelFare=[5,7,10,13][tier]??(15+3*(tier-4))
+  const coalFare=[4,6,9,12][tier]??(14+3*(tier-4))
   const coal=Math.max(420,Math.round(ROUTE_FUEL[next.index]*.38/10)*10)
   const steel=Math.max(12,Math.round(next.steel*.65))
   return [
-    ['steel','订购钢材',load(0,0,[5,7,10,13][tier]),load(0,steel)],
-    ['coal','订购燃煤',load(0,0,[4,6,9,12][tier]),load(coal)],
+    ['steel','订购钢材',load(0,0,steelFare),load(0,steel)],
+    ['coal','订购燃煤',load(0,0,coalFare),load(coal)],
   ].map(([key,label,cost,gain])=>{
     const soldOut=s.ops.marketBought?.includes(key)
     const status=soldOut?{enabled:false,reason:'本次停靠已采购，到站后补货'}:{}
@@ -83,7 +89,7 @@ function market(s) {
 const pairings = [[0,1],[2,3],[1,2],[0,3]]
 
 function assignments(s,rates) {
-  const stop=Math.min(s.stops,STOPS.length-1)
+  const stop=s.circuit?s.stops-1:s.stops
   const {serial}=s.ops
   const tripFactor=Math.min(1,s.trip.total/240)
   return pairings[(s.stops+serial)%pairings.length].map(kind=>{
@@ -92,7 +98,7 @@ function assignments(s,rates) {
     const deposit=spec.deposit?Math.max(1,Math.floor(reward.tickets/3)):0
     const cost=load(Math.round(spec.coal*(1+stop*.28)),0,deposit)
     const info=describe(cost)+' · '+spec.seconds+' 秒 · 结算选 '+reward.steel+' 钢材或 '+reward.tickets+' 运票'
-    return option(s,'assign','assign-'+s.stops+'-'+serial+'-'+kind,spec.names[Math.floor(stop/3)],spec.brief,info,cost,blankCost(),{jobKind:kind,reward})
+    return option(s,'assign','assign-'+s.stops+'-'+serial+'-'+kind,jobName(spec,stop),spec.brief,info,cost,blankCost(),{jobKind:kind,reward})
   })
 }
 
@@ -119,7 +125,7 @@ function manifest(s) {
 function activeJob(s) {
   const {job,serial}=s.ops
   const spec=work[job.kind]
-  const name=spec.names[Math.floor(job.stop/3)]
+  const name=jobName(spec,job.stop)
   const remaining=Math.max(0,Math.ceil(job.due-s.elapsed))
   const duration=job.due-job.startedAt
   const bonus=job.checked===true?1.25:1
@@ -171,7 +177,7 @@ export function runOperation(s,id,rates) {
   let message
   for(const key of Object.keys(GOODS)) s.stock[key]+=action.gain[key]-action.cost[key]
   if(action.kind==='assign') {
-    const stop=Math.min(s.stops,STOPS.length-1)
+    const stop=s.circuit?s.stops-1:s.stops
     const duration=work[action.jobKind].seconds
     s.ops.serial++
     s.ops.jobsStarted=(s.ops.jobsStarted??0)+1

@@ -1,3 +1,5 @@
+import { STOPS } from './data.mjs?v=6'
+
 const LATHES_PER_ASSEMBLY=8
 const ASSEMBLIES_PER_LINE=6
 const LATHES_PER_LINE=ASSEMBLIES_PER_LINE*LATHES_PER_ASSEMBLY
@@ -15,12 +17,14 @@ const MILESTONES = [
 ].map(([target,multiplier,name])=>({target,multiplier,name}))
 const INVENTORY_LIMIT=1e90
 const PURCHASE_LIMIT=400
-const BLUEPRINT_LIMIT=128
+const BLUEPRINT_LIMIT=512
 const OFFLINE_LIMIT=8*3600
 const partStock=()=>({lathe:0,assembly:0,line:0})
 const integer=(x,min,max)=>Number.isSafeInteger(x)&&x>=min&&x<=max
 const finite=(x,min,max)=>Number.isFinite(x)&&x>=min&&x<=max
-const stationFactor=stops=>1+.08*Math.max(0,Math.min(12,Number(stops)||0))
+const stationFactor=stops=>1+.08*Math.max(0,Math.min(STOPS.length,Number(stops)||0))
+const grades=['铸制','标准','耐磨','精制','耐候','密封','强化','耐热','低温合金','抗砂','星港级']
+const partGrade=generation=>grades[Math.min(generation,grades.length)-1]+'机件'
 const blueprintFactor=blueprints=>1+.65*blueprints
 const bounded=(x)=>Math.min(INVENTORY_LIMIT,x)
 const latheStations=w=>w.purchased.lathe+LATHES_PER_ASSEMBLY*w.purchased.assembly+LATHES_PER_LINE*w.purchased.line
@@ -173,7 +177,7 @@ function prestigeOffer(w,stops) {
   const after=w.blueprints+gain
   const nextGainTarget=gain>=12||gain>=remaining?null:threshold*10**(potential/2)
   return {type:'workshop',id:'prestige',label:'工坊换代',enabled:gain>0,reason:!remaining?'图纸已收集齐全':gain?'':'本代产出尚未达标',
-    gain,threshold,nextGainTarget,afterMultiplier:stationFactor(stops)*blueprintFactor(after),afterBlueprintMultiplier:blueprintFactor(after),
+    gain,threshold,nextGainTarget,nextGrade:partGrade(w.generation+1),afterMultiplier:stationFactor(stops)*blueprintFactor(after),afterBlueprintMultiplier:blueprintFactor(after),
     afterRailMultiplier:railFactor(after,w.bestLathe),
     description:'清空本代机件、设备和生产里程碑，带着启动机件重新开工。永久保留蓝图、历代产量和车床购置纪录。'}
 }
@@ -181,7 +185,7 @@ export function workshopView(w,stops=0) {
   const multiplier=factor(w,stops)
   const milestones=MILESTONES.map(x=>({...x,reached:w.earned>=x.target}))
   return {
-    parts:w.parts,earned:w.earned,lifetime:w.lifetime,blueprints:w.blueprints,generation:w.generation,bestLathe:w.bestLathe,
+    parts:w.parts,earned:w.earned,lifetime:w.lifetime,blueprints:w.blueprints,generation:w.generation,partGrade:partGrade(w.generation),bestLathe:w.bestLathe,
     perSecond:(1+Math.min(w.owned.lathe,latheStations(w)))*multiplier,multiplier,railMultiplier:industryMultiplier(w),stationMultiplier:stationFactor(stops),blueprintMultiplier:blueprintFactor(w.blueprints),
     tiers:MACHINES.map((_,i)=>tierView(w,multiplier,i)),milestones,nextMilestone:milestones.find(x=>!x.reached)||null,
     prestige:prestigeOffer(w,stops),

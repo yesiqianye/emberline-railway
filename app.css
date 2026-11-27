@@ -55,3 +55,8 @@
   .nav button {gap:4px;padding:10px 1px;font-size:12px}
   .nav button svg {width:14px}
 }
+
+.cab-service { display:flex; flex-wrap:wrap; align-items:center; gap:0 14px; margin-top:9px; }
+.cab-service .text-btn { min-height:40px; padding:3px 0; }
+.cab-service small, #station-count { color:var(--muted); font-size:12px; font-weight:500; }
+#station-count { white-space:nowrap; }

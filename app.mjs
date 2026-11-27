@@ -1,14 +1,15 @@
-import { renderRailDispatch, renderRailEngineering } from './railworks-ui.mjs?v=5';
-import { renderWorkshopSummary, renderWorkshop } from './workshop-ui.mjs?v=5';
-import { advance, act, view } from './engine.mjs?v=5';
-import { renderPanel, renderOperations } from './panels.mjs?v=5';
-import { loadGame, saveGame, setupSettings } from './saves.mjs?v=5';
+import { renderRailDispatch, renderRailEngineering } from './railworks-ui.mjs?v=6';
+import { renderWorkshopSummary, renderWorkshop } from './workshop-ui.mjs?v=6';
+import { advance, act, view } from './engine.mjs?v=6';
+import { renderPanel, renderOperations } from './panels.mjs?v=6';
+import { loadGame, saveGame, setupSettings } from './saves.mjs?v=6';
 import { icon } from './icons.mjs?v=3';
+import { STOPS_PER_REGION } from './data.mjs?v=6';
 
 const $ = id => document.getElementById(id);
 const labels = {cab:['驾驶台','机车驾驶台','gauge'],workshop:['工坊','车载工坊','workshop'],map:['线路图','全线线路图','map'],garage:['车库','机车车库','garage'],freight:['货运站','货运调度站','cargo']};
 const names = {coal:'煤炭',steel:'钢材',tickets:'运票'};
-const chapters = ['第一章','第二章','第三章','第四章'];
+const chapters = ['第一章','第二章','第三章','第四章','第五章','第六章','第七章','第八章','第九章','第十章'];
 const fmt = new Intl.NumberFormat('zh-CN',{maximumFractionDigits:0});
 const safety = value => String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 let state = loadGame();
@@ -106,6 +107,7 @@ const cab = `
             <button class="cab-btn" id="manual-coal" data-action="stoke" hidden>${icon('shovel')}手动添煤 <small id="stoke-amt"></small></button>
             <button class="cab-btn main" data-action="depart">${icon('train')}<span id="depart-text"></span></button>
           </div>
+          <div id="cab-service"></div>
         </div>
       </section>
       <div id="cab-railworks"></div>
@@ -117,7 +119,7 @@ const cab = `
         <h3 id="goal"></h3><p id="goal-desc"></p><div id="goal-link"></div>
       </section>
       <section class="info-card">
-        <h2 class="card-title">${icon('path')}行程路线<a href="#map" title="查看全线线路图" aria-label="查看全线线路图">${icon('arrow')}</a></h2>
+        <h2 class="card-title">${icon('path')}行程路线<small id="station-count"></small><a href="#map" title="查看全线线路图" aria-label="查看全线线路图">${icon('arrow')}</a></h2>
         <ol class="stops" id="stops"></ol>
       </section>
     </aside>
@@ -164,15 +166,21 @@ function showCab(v, notice) {
   text($('location-type'),leg.traveling?'当前区间':'当前位置');
   text($('site-name'),leg.traveling?leg.name:station.name);
   text($('site-desc'),leg.traveling || leg.circuit?leg.description:station.description);
-  html($('next'),leg.circuit?'海湾环运 · <b>曙光总站往返</b>':(leg.traveling?'即将抵达':'下一站')+'　<b>'+safety(leg.destination)+'</b>');
-  text($('distance'),leg.traveling?'剩余 '+time(Math.ceil(leg.remaining)):leg.circuit?'已完成 '+v.railworks.circuits+' 班':Math.floor(v.distance)+' / '+v.stations.at(-1).km+' km');
+  const destination=leg.circuit?safety(leg.loop)+' · <b>'+safety(leg.destination)+'往返</b>':
+    (leg.traveling?'即将抵达':'下一站')+'　<b>'+safety(leg.destination)+'</b>';
+  html($('next'),destination);
+  text($('distance'),leg.traveling?'剩余 '+time(Math.ceil(leg.remaining)):leg.circuit?'累计环运 '+v.railworks.circuits+' 班':Math.floor(v.distance)+' / '+v.stations.at(-1).km+' km');
   $('progress').hidden=!leg.traveling;
   if(leg.traveling)$('progress').firstChild.style.width=leg.progress*100+'%';
   showStoker(v);
   const depart=$('depart-text').closest('button');
   text($('depart-text'),v.actions.depart.label);
   depart.disabled=!v.actions.depart.enabled;
-  depart.title=v.actions.depart.reason || '备齐物资，驶向下一站';
+  depart.title=v.actions.depart.reason || (leg.circuit?'备齐物资，开行环运班列':'备齐物资，驶向下一站');
+  const service=v.actions.service;
+  liveHTML($('cab-service'),service?'<div class="cab-service"><button class="text-btn" data-action="service" type="button"'+
+    (service.enabled?'':' disabled')+'>'+safety(service.label)+icon('arrow')+'</button>'+
+    (service.reason?'<small>'+safety(service.reason)+'</small>':'')+'</div>':'');
   text($('goal'),objective.title);
   let description=objective.description;
   if(v.elapsed<75 && !leg.traveling && !leg.stopsDone)description+=' 钢材会自动入库，备齐即可发车。';
@@ -185,9 +193,10 @@ function showCab(v, notice) {
   }
   liveHTML($('cab-railworks'), renderRailDispatch(v));
   liveHTML($('cab-operations'), renderOperations(v,{compact:true}));
-  const start=region.index*3;
+  text($('station-count'),leg.stopsDone+' / '+v.stations.length+' 站');
+  const start=region.index*STOPS_PER_REGION;
   const prior=start===0?{name:'余烬机务段',km:0,status:leg.stopsDone===0?'current':'done'}:v.stations[start-1];
-  html($('stops'),[prior,...v.stations.slice(start,start+3)].map(s=>'<li class="'+s.status+'"><span>'+safety(s.name)+'</span><small>'+s.km+' km</small></li>').join(''));
+  html($('stops'),[prior,...v.stations.slice(start,start+STOPS_PER_REGION)].map(s=>'<li class="'+s.status+'"><span>'+safety(s.name)+'</span><small>'+s.km+' km</small></li>').join(''));
   html($('journal-list'),v.log.slice(0,5).map(l=>'<li><time>'+new Date(l.time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false})+'</time><span>'+safety(l.text)+'</span></li>').join(''));
 }
 function render() {

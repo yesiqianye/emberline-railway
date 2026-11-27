@@ -19,9 +19,10 @@ const shapes = {
 const icon = (name) => '<svg class="erp-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round">' + shapes[name] + '</svg>';
 const escape = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const numbers = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 });
+const compactParts = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumSignificantDigits: 3 });
 const resNames = { coal:'煤炭', steel:'钢材', tickets:'运票' };
 const resIcons = { coal:'fire', steel:'steel', tickets:'ticket' };
-const regionNumbers = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ'];
+const regionNumbers = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ','Ⅷ','Ⅸ','Ⅹ'];
 
 function actionButton(a, tone = '', alternate) {
   if (!a || !a.type) return '';
@@ -102,15 +103,23 @@ function mapPanel(v) {
   const regionMap = regions.map((r, i) => {
     const stops = stations.filter(s => s.regionIndex === r.index);
     return '<section class="erp-zone' + (r.index === v.region.index ? ' is-here' : '') + '">' +
-      '<header><b class="erp-numeral">' + (regionNumbers[i] || (i+1)) + '</b><span>' + escape(r.name) + '</span></header>' +
+      '<header><b class="erp-numeral">' + (regionNumbers[i] || (i+1)) + '</b><div><strong>' + escape(r.name) +
+      '</strong><small>从第 ' + stops[0].repair.requiredGeneration + ' 代开放快修</small></div></header>' +
       '<ol>' + stops.map(s => '<li class="erp-stop ' + escape(s.status) + '" title="' + escape(s.description) + '">' +
         '<span class="erp-stop-node">' + (s.status === 'done' ? icon('check') : '') + '</span><div><strong>' + escape(s.name) + '</strong>' +
-        '<small>' + escape(numbers.format(s.km)) + ' km' + (s.status === 'current' ? ' · 当前站' : s.status === 'next' ? ' · 下一站' : '') + '</small></div></li>').join('') + '</ol></section>';
+        '<small>' + escape(numbers.format(s.km)) + ' km' + (s.status === 'current' ? ' · 当前站' : s.status === 'next' ? ' · 下一站' : '') + '</small>' +
+        '<small class="erp-stop-repair">快修 ' + escape(compactParts.format(s.repair.cost)) + ' 机件</small></div></li>').join('') + '</ol></section>';
   }).join('');
   const progress = Math.min(100, Math.max(0, (leg.progress || 0) * 100));
-  const dispatch = '<section class="erp-box">' + title('junction', leg.circuit ? '海湾环运班列' : '区间调度', leg.circuit ? '全线贯通 · 已完成 ' + v.railworks.circuits + ' 班' : leg.traveling ? '行车中' : '停站中') +
-    '<div class="erp-trip"><div><h4>' + escape(v.station.name) + '<span class="erp-track-arrow" aria-hidden="true">→</span>' + (leg.circuit ? '海湾沿岸 → ' : '') + escape(leg.destination) + '</h4>' +
-    '<p>' + escape(leg.description) + '</p>' + (!leg.traveling && !v.actions.depart.enabled ? '<small class="erp-depart-reason">' + escape(v.actions.depart.reason) + '</small>':'') + '</div>' + actionButton(v.actions.depart, 'erp-primary') + '</div>' +
+  const repair = v.railworks.repair;
+  const service = v.actions.service;
+  const phase = v.finished ? '全线贯通' : leg.traveling ? '行车中' : '停站中';
+  const dispatch = '<section class="erp-box">' + title('junction', leg.circuit ? escape(leg.loop) + '班列' : '区间调度', phase) +
+    '<div class="erp-trip"><div><h4>' + escape(v.station.name) + '<span class="erp-track-arrow" aria-hidden="true">→</span>' + (leg.circuit ? '沿岸 → ' : '') + escape(leg.destination) + '</h4>' +
+    '<p>' + escape(leg.description) + '</p><small class="erp-repair-quote">快修 · 第 ' + repair.requiredGeneration + ' 代起 · ' + numbers.format(repair.cost) +
+    ' 机件</small>' + (!leg.traveling && !v.actions.depart.enabled ? '<small class="erp-depart-reason">' + escape(v.actions.depart.reason) + '</small>':'') +
+    '</div><div class="erp-trip-actions">' + actionButton(v.actions.depart, 'erp-primary') + actionButton(service) +
+    (service?.reason ? '<small>' + escape(service.reason) + '</small>' : '') + '</div></div>' +
     (leg.traveling ? '<div class="erp-journey"><div><span>' + escape(selectedRoute?.name || '行驶进度') + '</span><span>' + Math.floor(progress) + '%</span></div><progress max="100" value="' + progress + '"></progress></div>' : '') +
     '<div class="erp-forks' + (leg.traveling ? ' erp-enroute' : '') + '">' +
     (leg.traveling ? routes.filter(r => r.selected) : routes).map(r => routeCard(r, routes.find(other => other.id !== r.id), leg.traveling)).join('') +

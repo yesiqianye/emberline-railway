@@ -46,10 +46,12 @@
 .erp-fork.is-picked { border-color: #796344; }
 .erp-fork.is-picked .erp-letter { color: var(--erp-brass); border-color: var(--erp-brass); }
 .erp-fork-bottom { display: flex; align-items: end; justify-content: space-between; gap: 8px; margin-top: auto; }
-.erp-map { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); }
-.erp-zone { padding: 17px 18px 19px; min-width: 0; }
-.erp-zone + .erp-zone { border-left: 1px solid var(--erp-line); }
+.erp-map { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 1px; background: var(--erp-line); }
+.erp-zone { padding: 17px 18px 19px; min-width: 0; background: var(--erp-floor); }
+.erp-trip-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.erp-repair-quote, .erp-trip-actions small { display: block; margin-top: 5px; color: var(--erp-muted); font-size: 12px; }
 .erp-zone header { display: flex; align-items: center; gap: 9px; min-height: 32px; color: #b8c0ca; font-size: 14px; font-weight: 650; }
+.erp-zone header small, .erp-stop small.erp-stop-repair { display: block; color: var(--erp-muted); font: 11px/1.55 var(--sans); }
 .erp-zone.is-here header { color: var(--erp-brass); }
 .erp-numeral { font: 12px/24px Georgia,serif; width: 25px; text-align: center; border: 1px solid #46515e; border-radius: 3px; }
 .erp-zone.is-here .erp-numeral { border-color: #786547; }
