@@ -1,7 +1,7 @@
-import { newWorkshop, restoreWorkshop, advanceWorkshop, workshopView, workshopAction, industryMultiplier } from './workshop.mjs?v=3'
-import { newOperations, restoreOperations, operationsView, runOperation } from './operations.mjs?v=4'
-import { newRailworks, restoreRailworks, railworksView, applyRailProjects, savedSeconds, runRailwork } from './railworks.mjs?v=4'
-import { REGIONS, DEPOT, STOPS, GOODS, ROUTE_FUEL, ROUTE_VALUE, UPG, CARS, LINES, INCIDENTS } from './data.mjs?v=2'
+import { newWorkshop, restoreWorkshop, advanceWorkshop, workshopView, workshopAction, industryMultiplier } from './workshop.mjs?v=5'
+import { newOperations, restoreOperations, resetStopOperations, operationsView, runOperation } from './operations.mjs?v=5'
+import { newRailworks, restoreRailworks, railworksView, applyRailProjects, savedSeconds, runRailwork } from './railworks.mjs?v=5'
+import { REGIONS, DEPOT, STOPS, GOODS, ROUTE_FUEL, ROUTE_VALUE, UPG, CARS, LINES, INCIDENTS } from './data.mjs?v=5'
 
 const goods = Object.keys(GOODS)
 const zeros = () => ({coal:0,steel:0,tickets:0})
@@ -15,11 +15,12 @@ const HOUR = 3600000
 const SHOVEL_MS = 650
 const LEGACY_COAL_SCALE = 24
 const HAUL_TIME = 1.22
+const SIGNAL_SUPPLY_SECONDS = 45
 const phases = [.23,.51,.77]
 
 export function newGame(now=Date.now()) {
   return {
-    version:4,workshop:newWorkshop(),railworks:newRailworks(),last:now,elapsed:0,stock:{coal:18,steel:6,tickets:0},stops:0,track:'fast',trip:null,
+    version:5,workshop:newWorkshop(),railworks:newRailworks(),last:now,elapsed:0,stock:{coal:18,steel:6,tickets:0},stops:0,track:'fast',trip:null,
     upgrades:Object.fromEntries(UPG.map(x=>[x.id,0])),cars:['tender'],
     freights:Object.fromEntries(LINES.map(x=>[x.id,0])),orders:[],shovelAuto:true,shovelCycleMs:0,ops:newOperations(),
     log:[{time:now,text:'余烬机务段重新开炉。凑齐出发物资，让第一班列车开往煤灰小站。',kind:'info'}],
@@ -54,7 +55,7 @@ function scoop(s) {
 }
 function passiveRates(s) {
   const u=s.upgrades
-  const r={coal:(.72+.25*u.shovel)*(equipped(s,'tender')?1.3:1),steel:(.083+.055*u.mill)*(equipped(s,'shop')?1.35:1),tickets:s.stops>=2?.009:0}
+  const r={coal:(.72+.25*u.shovel)*(equipped(s,'tender')?1.3:1),steel:(.083+.055*u.mill)*(equipped(s,'shop')?1.35:1),tickets:.025+.004*s.stops}
   if (equipped(s,'heater')) r.steel*=1.1
   if(s.trip && target(s).regionIndex===2 && !equipped(s,'heater')) r.steel*=.7
   if(s.trip && equipped(s,'mail')) r.tickets+=.05
@@ -66,6 +67,11 @@ function passiveRates(s) {
   r.coal*=(1+.05*orderCount(s,0))*industrial
   r.steel*=(1+.05*orderCount(s,1))*industrial
   return r
+}
+function automaticRates(s,shovelAmount=scoop(s)) {
+  const rates=passiveRates(s)
+  if(s.shovelAuto) rates.coal+=shovelAmount*1000/SHOVEL_MS
+  return rates
 }
 function basketValue(basket) {
   return goods.reduce((sum,k)=>sum+basket[k]*ROUTE_VALUE[k],0)
@@ -139,6 +145,7 @@ function arrive(s,time) {
   else s.stops++
   s.railworks.cargo=null
   s.railworks.repairUsed=false
+  resetStopOperations(s.ops)
   s.trip=null
   s.track='fast'
   const entry=circuit?'海湾环运第 '+s.railworks.circuits+' 班返回'+arrived.name:complete(s)?'曙光灯塔亮起，全线十二座车站恢复通车':'抵达'+arrived.name
@@ -203,17 +210,19 @@ function priorityService(s) {
   const action=button('priority',null,trip.priorityUsed?'本程已购买':'购买优先通行',trip.priorityUsed?'每程限购一次':missing(s,cost))
   return {...action,info,cost,percent:8,saved,used:trip.priorityUsed}
 }
-function signals(s) {
+function signals(s,rates) {
   if(!availableSignal(s)) return []
   const stop=target(s)
-  const [name,description,supply,skip,load,timeFactor]=INCIDENTS[stop.regionIndex][s.trip.signals]
+  const [name,description,supply,skip,resource,timeFactor]=INCIDENTS[stop.regionIndex][s.trip.signals]
   const percent=Number((timeFactor*100).toFixed(3))
   const saved=savedSeconds(s.trip,timeFactor)
-  const award=fromArray([70+stop.index*31,4+stop.index,2+stop.regionIndex].map((v,i)=>Math.ceil(v*load[i])))
+  const award=zeros()
+  award[resource]=Math.floor(rates[resource]*SIGNAL_SUPPLY_SECONDS)
   return ['supply','skip'].map((option,i)=>{
     const id='signal-'+stop.index+'-'+s.trip.signals+'-'+option
     return {id,kind:'signal',name:name+' · '+(i?skip:supply),description,station:stop.name,unlocked:true,completed:false,cost:zeros(),saved,percent,award,
-      info:i?'按发车时全程的 '+percent+'% 提速，本次抵扣 '+saved+' 秒':'立即获得 '+costText(award),action:button('contract',id,i?skip:supply,i && saved===0?'列车即将到站':'')}
+      info:i?'按发车时全程的 '+percent+'% 提速，本次抵扣 '+saved+' 秒':'立即获得 '+costText(award)+' · 折合约 '+Math.round(award[resource]/rates[resource])+' 秒自动产量',
+      action:button('contract',id,i?skip:supply,i && saved===0?'列车即将到站':'')}
   })
 }
 function makeView(s) {
@@ -244,8 +253,7 @@ function makeView(s) {
   const toggleStoke=button('toggleStoke',null,s.shovelAuto?'切换手动':'开启自动')
   const amount=scoop(s)
   const autoStoke={enabled:s.shovelAuto,intervalMs:SHOVEL_MS,amount,perSecond:amount*1000/SHOVEL_MS,perMinute:amount*60000/SHOVEL_MS,cycleMs:s.shovelCycleMs,action:toggleStoke}
-  const rates=passiveRates(s)
-  if(s.shovelAuto) rates.coal+=autoStoke.perSecond
+  const rates=automaticRates(s,amount)
   const upgrades=UPG.map(u=>{
     const level=s.upgrades[u.id],cost=levelsCost(u.base,level),maxed=level>=u.max
     const nextLevelGate=level>=5?9:level>=4?6:level>=2?3:0
@@ -262,7 +270,7 @@ function makeView(s) {
     return {...line,level,max,unlocked:s.stops>=line.from,cost,info:(level<max?costText(cost)+' · ':'')+goods.map((k,i)=>'+'+(line.rate[i]*60*(1+s.upgrades.yard*.15)).toFixed(1)+' '+GOODS[k]).join(' / ')+' 每分每级',
       action:button('freight',line.id,level===max?'满负荷':level?'扩充运力':'开通货运',level===max?'货运线已满级':gate(s,line.from)||missing(s,cost))}
   })
-  const signalList=signals(s)
+  const signalList=signals(s,rates)
   const contracts=[...signalList,...STOPS.map(x=>stationOrder(s,x))]
   const originTitle=done?'海湾环运班列':'开往'+stop.name
   const objective=moving?(signalList.length?{title:'沿途调度 · '+signalList[0].name.split(' · ')[0],description:signalList[0].description+'可在货运页选择补给或优先通行。',action:signalList[0].action}:
@@ -275,7 +283,7 @@ function makeView(s) {
   const workshop=workshopView(s.workshop,s.stops)
   workshop.trainSpeedPercent=blueprintSpeedPercent(workshop.blueprints)
   workshop.prestige.trainSpeedPercentAfter=blueprintSpeedPercent(workshop.blueprints+workshop.prestige.gain)
-  return {resources:{...s.stock},workshop,railworks:railworksView(s),rates,autoStoke,operations:operationsView(s),priorityPass:priorityService(s),region,station:current,regions:REGIONS,stations:STOPS.map(x=>({...x,status:x.index===s.stops-1?'current':x.index<s.stops?'done':x.index===s.stops?'next':'locked'})),
+  return {resources:{...s.stock},workshop,railworks:railworksView(s),rates,autoStoke,operations:operationsView(s,rates),priorityPass:priorityService(s),region,station:current,regions:REGIONS,stations:STOPS.map(x=>({...x,status:x.index===s.stops-1?'current':x.index<s.stops?'done':x.index===s.stops?'next':'locked'})),
     leg:{index:stop.index,circuit:done,name:route.name,description:done?'从曙光总站出发，沿海湾运送货物后返回本站。':stop.description,progress,remaining:left,total,destination:stop.name,traveling:moving,ready:depart.enabled,route:s.track,stopsDone:s.stops,cost:route.cost,award:route.award},
     objective,actions:{stoke,depart,toggleStoke},upgrades,cars,freights,routes,contracts,log:s.log,finished:done,elapsed:s.elapsed,slots:slots(s),distance,offline:s.offline,stokeAmount:amount}
 }
@@ -299,7 +307,7 @@ export function act(s,type,id=null,now=Date.now()) {
     return result
   }
   if(type==='operation') {
-    const result=runOperation(s,id)
+    const result=runOperation(s,id,automaticRates(s))
     if(result.ok) addLog(s,'contract',result.message)
     return result
   }
@@ -383,7 +391,7 @@ function cleanLog(log) {
 export function restore(raw,now=Date.now()) {
   const x=typeof raw==='string'?JSON.parse(raw):raw
   const fail=()=>{throw new Error('存档格式无效或版本不受支持。')}
-  if(!record(x)||![1,2,3,4].includes(x.version)||!int(x.stops,0,STOPS.length)||!finite(x.last,0,9e15)||!finite(x.elapsed)||!validStock(x.stock)||!['fast','haul'].includes(x.track)) fail()
+  if(!record(x)||![1,2,3,4,5].includes(x.version)||!int(x.stops,0,STOPS.length)||!finite(x.last,0,9e15)||!finite(x.elapsed)||!validStock(x.stock)||!['fast','haul'].includes(x.track)) fail()
   if(!validLevels(x.upgrades,UPG,d=>d.max)||!validLevels(x.freights,LINES,()=>3)) fail()
   if(!Array.isArray(x.cars)||x.cars.length>slots(x)||new Set(x.cars).size!==x.cars.length||!x.cars.every(id=>CARS.some(c=>c.id===id && c.from<=x.stops))) fail()
   if(!Array.isArray(x.orders)||x.orders.length>STOPS.length||new Set(x.orders).size!==x.orders.length||!x.orders.every(i=>int(i,0,x.stops-1))) fail()
@@ -397,7 +405,7 @@ export function restore(raw,now=Date.now()) {
     if(!record(x.workshop)) fail()
     s.workshop=restoreWorkshop(x.workshop)
   }
-  if(x.version===4) s.railworks=restoreRailworks(x.railworks,x.stops,!!t,s.workshop.blueprints)
+  if(x.version>=4) s.railworks=restoreRailworks(x.railworks,x.stops,!!t,s.workshop.blueprints)
   Object.assign(s,{last:Math.min(x.last,now),elapsed:x.elapsed,stops:x.stops,track:x.track,cars:[...x.cars],orders:[...x.orders],log:cleanLog(x.log),shovelAuto:legacy?true:x.shovelAuto,shovelCycleMs:legacy?0:x.shovelCycleMs,ops:legacy?newOperations():restoreOperations(x.ops)})
   for(const k of goods) s.stock[k]=x.stock[k]
   for(const u of UPG) s.upgrades[u.id]=x.upgrades[u.id]
@@ -413,7 +421,7 @@ export function restore(raw,now=Date.now()) {
     const oldTime=stop.min*60*(s.track==='haul'?1.13:1)
     const speedBonus=legacy?Math.max(0,(oldTime/t.total-1)*100):t.speedBonus
     s.trip={total:t.total,left:t.left,signals:t.signals,award:fromArray(goods.map(k=>t.award[k])),price,speedBonus,priorityUsed:legacy?false:(t.priorityUsed??false)}
-    if(x.version===4 && t.savings!==undefined) {
+    if(x.version>=4 && t.savings!==undefined) {
       if(!record(t.savings) || !int(t.savings.coal,0,1e9) || !int(t.savings.tickets,0,1e9)) fail()
       s.trip.savings={coal:t.savings.coal,tickets:t.savings.tickets}
     }

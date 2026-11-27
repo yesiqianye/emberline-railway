@@ -79,8 +79,9 @@ test('station-loaded parts are charged once, survive switching routes and pay on
   assert.equal(stale.workshop.parts, reload(ready, due).workshop.parts);
 
   assert.equal(arrived.stops, 1);
-  assert.equal(arrived.stock.tickets, tickets + quotedTickets);
-  assert.equal(arrived.offline.tickets, quotedTickets);
+  const automaticTickets=base.total*view(ready).rates.tickets+60*view(arrived).rates.tickets;
+  close(arrived.stock.tickets,tickets+quotedTickets+automaticTickets);
+  close(arrived.offline.tickets,quotedTickets+automaticTickets);
   assert.equal(rail(arrived).cargo.loaded, false);
   assert.equal(reload(arrived).stock.tickets, arrived.stock.tickets);
 });
@@ -89,7 +90,7 @@ test('v3 blueprints immediately fund real projects without losing booked fares, 
   const old = v3Save();
   const s = reload(old);
   const baseline = view(s);
-  assert.equal(s.version, 4);
+  assert.equal(s.version, 5);
   assert.deepEqual(s.workshop, old.workshop);
   assert.deepEqual(s.stock, old.stock);
   assert.equal(rail(s).available, 7);
@@ -112,7 +113,7 @@ test('v3 blueprints immediately fund real projects without losing booked fares, 
 
   const plain = reload(old, old.last + old.trip.left * 1000);
   const next = reload(s, s.last + s.trip.left * 1000);
-  assert.equal(next.stock.tickets, old.trip.award.tickets);
+  close(next.stock.tickets,old.trip.award.tickets+baseline.rates.tickets*old.trip.left);
   for (const route of view(plain).routes) {
     const modified = view(next).routes.find(r => r.id === route.id);
     assert.equal(modified.savings.coal, route.cost.coal - modified.cost.coal);
@@ -130,14 +131,24 @@ test('v3 blueprints immediately fund real projects without losing booked fares, 
   close(next.stock.coal, before.coal - booked.cost.coal);
   use(next, 'railworks', 'cargo');
   assert.equal(view(next).leg.award.tickets, booked.award.tickets + unit.tickets);
+  const automaticTickets=view(next).rates.tickets*next.trip.left;
   const atStation = reload(next, next.last + next.trip.left * 1000);
-  assert.equal(atStation.stock.tickets, before.tickets + booked.award.tickets + unit.tickets);
+  close(atStation.stock.tickets,before.tickets+booked.award.tickets+unit.tickets+automaticTickets);
 });
 
-test('repairs deduct the quote and skip the booked percentage once; a late repair settles cargo immediately', () => {
+test('the first prestige unlocks one parts repair per leg; a late repair settles cargo immediately', () => {
   const s = newGame(start);
-  advance(s, s.last + 5 * 60_000);
+  use(s,'workshop','buy:lathe:1');
+  advance(s,s.last+hour);
+  use(s,'workshop','buy:assembly:max');
+  advance(s,s.last+8*hour);
   use(s, 'depart');
+  assert.ok(s.workshop.parts>=rail(s).repair.cost);
+  assert.match(rail(s).repair.action.reason,/第 2 代/);
+  reject(s,'repair');
+  use(s,'workshop','prestige');
+  assert.equal(s.workshop.generation,2);
+  use(s,'workshop','buy:lathe:1');
   advance(s, s.last + 30_000);
   const first = rail(s).repair;
   const before = {left:s.trip.left, parts:s.workshop.parts};
@@ -159,11 +170,12 @@ test('repairs deduct the quote and skip the booked percentage once; a late repai
   assert.equal(quote.saved, 0.5);
   const fare = view(late).leg.award.tickets;
   const stock = late.workshop.parts;
+  const ticketsBefore=late.stock.tickets;
   use(late, 'railworks', 'repair');
   close(late.workshop.parts, stock - quote.cost);
   assert.equal(late.trip, null);
   assert.equal(late.stops, 1);
-  assert.equal(late.stock.tickets, old.stock.tickets + fare);
+  close(late.stock.tickets,ticketsBefore+fare);
   assert.equal(rail(late).cargo.loaded, false);
   reject(late, 'repair');
   assert.equal(reload(late).stock.tickets, late.stock.tickets);
@@ -249,7 +261,7 @@ test('a finished v3 railway can book repeat circuits; arrival pays once and keep
   const coalBefore = ready.stock.coal;
   use(ready, 'depart');
   close(ready.stock.coal, coalBefore - route.cost.coal);
-  use(ready, 'railworks', 'repair');
+  reject(ready,'repair');
   const returning = reload(ready);
   assert.ok(view(returning).finished && view(returning).leg.traveling);
   reject(returning, 'repair');
@@ -277,7 +289,7 @@ test('a finished v3 railway can book repeat circuits; arrival pays once and keep
 test('surplus blueprints increase repeat freight fares, with each paid crate locked to its loading quote', () => {
   const old = v3Save();
   Object.assign(old, {stops:12, trip:null});
-  Object.assign(old.workshop, {blueprints:19, parts:1e6, earned:1e9, lifetime:2e9});
+  Object.assign(old.workshop, {blueprints:19, parts:2e7, earned:1e9, lifetime:2e9});
   const s = reload(old);
   const quote = rail(s).cargo;
   assert.equal(quote.blueprintPremium, 1);

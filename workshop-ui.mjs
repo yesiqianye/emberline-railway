@@ -84,14 +84,17 @@ function quantitySelector(quantity) {
 function equipment(tier, quantity) {
   const action = tier.actions[quantity];
   const generated = Math.max(0, tier.owned - tier.purchased);
+  const capacity = Number.isFinite(tier.capacity) ? '<small>占用工位 <b>' + format(tier.running) + ' / ' + format(tier.capacity) +
+    '</b>' + (tier.owned > tier.running ? ' · 备用 ' + format(tier.owned - tier.running) + ' 台' : '') + '</small>' : '';
   const effect = '<small>购后 ' + format(action.afterPerSecond) + ' ' + esc(tier.output) + ' / 秒</small>';
   const price = action.quantity > 0 ? action.cost : tier.unitCost;
   const costText = (action.quantity > 0 ? '本批总价' : '下一台') + ' ' + format(price) + ' 机件';
   const buy = action.quantity > 0 ? '购入 ' + format(action.quantity) + ' 台' : '暂不可购';
   return '<article class="ws-equipment"><div class="ws-equip-label"><h3>' + esc(tier.name) + '</h3><p>' +
     esc(tier.description) + '</p><small>持有 <b>' + format(tier.owned) + '</b> 台 · 购入 ' +
-    format(tier.purchased) + ' · 自产 ' + format(generated) + '</small></div><div class="ws-equip-flow"><strong>' +
-    format(tier.perSecond) + ' <small>' + esc(tier.output) + ' / 秒</small></strong>' + effect +
+    format(tier.purchased) + ' · 自产 ' + format(generated) + '</small>' + capacity + '</div><div class="ws-equip-flow"><strong>' +
+    format(tier.perSecond) + ' <small>' + esc(tier.output) + ' / 秒</small></strong>' +
+    (tier.outputFull ? '<small>' + esc(tier.output) + '工位已满</small>' : '') + effect +
     '</div><div class="ws-purchase"><small>' + costText + '</small>' + actionButton(action,buy,'',tier.name+' · '+buy) +
     (!action.enabled && action.reason ? '<small class="ws-reason">' + esc(action.reason) + '</small>' : '') +
     '</div></article>';
@@ -119,7 +122,7 @@ function generations(v, confirm) {
       ' 机件即可换代，获得一张永久蓝图。' : esc(p.reason);
     return '<section class="ws-card ws-generation"><header class="ws-head"><h2>' + icon('book') +
       '蓝图换代</h2><span>第 ' + w.generation + ' 代</span></header><div class="ws-generation-body">' +
-      ledger + '<p>' + unlock + '</p>' + engineering + '</div></section>';
+      ledger + '<p>' + unlock + (w.generation === 1 ? ' 第 2 代开放行车快修。' : '') + '</p>' + engineering + '</div></section>';
   }
   const preview = '<div class="ws-effects"><h3>换代后</h3><dl><div><dt>工坊起步倍率</dt><dd>×' +
     format(p.afterMultiplier) + '</dd></div><div><dt>可用于铁路改装</dt><dd>' + format(v.railworks.available + p.gain) +
@@ -133,7 +136,7 @@ function generations(v, confirm) {
     '<button class="ws-button" data-workshop-confirm="open" type="button"' + (p.enabled ? '' : ' disabled') + '>预览换代</button>';
   return '<section class="ws-card ws-generation"><header class="ws-head"><h2>' + icon('book') +
     '蓝图换代</h2><span>第 ' + w.generation + ' 代</span></header><div class="ws-generation-body">' +
-    ledger + '<p>本次换代可获得 <strong>' + format(p.gain) + ' 张蓝图</strong>。' +
+    ledger + '<p>本次换代可获得 <strong>' + format(p.gain) + ' 张蓝图</strong>。' + (w.generation === 1 ? ' 换代后解锁行车快修。' : '') +
     (p.nextGainTarget ? '本代累计产出达到 ' + format(p.nextGainTarget) + ' 机件可再多得一张。' : '') + '</p>' +
     engineering + (confirm && p.enabled ? '' : '<p>' + resets + retain + '</p>') + preview + panel + '</div></section>';
 }
@@ -149,7 +152,7 @@ export function renderWorkshop(v, {quantity = '1', confirmPrestige = false} = {}
     '<dl class="ws-figures"><div><dt>机件库存</dt><dd>' + format(w.parts) + '</dd></div><div><dt>机件 / 秒</dt><dd>+' +
     format(w.perSecond) + '</dd></div><div><dt>工坊产量倍率</dt><dd>×' + format(w.multiplier) +
     '</dd></div></dl>' + railwayUses(v) + '<p class="ws-rail">' + icon('train') + '煤钢产量 ×' + format(w.railMultiplier) + ' · 发车速度 +' + format(w.trainSpeedPercent) + '% · 每开通一站，工坊基础产速增加 8%。</p></section><section class="ws-card"><header class="ws-head"><h2>' + icon('garage') +
-    '设备生产链</h2>' + quantitySelector(q) + '</header><p class="ws-chain">自带工作台每秒生产 1 机件。车床增加机件产量，装配台制造车床，自动产线制造装配台。</p>' +
+    '设备生产链</h2>' + quantitySelector(q) + '</header><p class="ws-chain">车床生产机件，装配台造车床，产线造装配台。工位满后，购入装配台或产线可继续扩产。</p>' +
     w.tiers.map(t => equipment(t, q)).join('') + '</section><div class="ws-sidegrid">' + milestoneSection(w) +
     generations(v,confirmPrestige) + '</div></div>';
 }

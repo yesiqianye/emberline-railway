@@ -176,7 +176,7 @@ export function renderOperations(v, {compact = false} = {}) {
     (ops.instruction ? '<p class="erp-op-instruction">' + escape(ops.instruction) + '</p>' : '') +
     operationChoices(ops.actions || [], compact) + '</div>' : '';
   const shop = market.length ? '<div class="erp-op-block"><h4>' + icon('ticket') + '站内采购</h4>' +
-    (phase === 'station' && ops.description ? '<p>' + escape(ops.description) + '</p>' : '') +
+    '<p>每次停靠，燃煤和钢材各可采购一批。到站后补货。</p>' +
     operationChoices(market, compact) + '</div>' : '';
   const pass = v.priorityPass;
   const priority = pass ? '<div class="erp-op-block"><h4>' + icon('signal') + '优先通行</h4>' +

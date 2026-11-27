@@ -1,6 +1,7 @@
-import { STOPS } from './data.mjs?v=2'
+import { STOPS } from './data.mjs?v=5'
 
 const maxLevel=3
+const quickRepairGeneration=2
 const nozzlePercent=level=>8*level
 const rackPercent=level=>15*level
 const repairPercent=level=>8+4*level
@@ -11,6 +12,8 @@ const projects=[
 ]
 // Each station posts a fixed parts contract. Switching tracks never changes the agreed fare.
 const stationFares=[4,4,6,13,20,26,34,41,47,66,75,86]
+const stationParts=[40,360,2000,9000,26000,65000,160000,340000,750000,1550000,3000000,5800000]
+const circuitParts=3000000
 const invested=levels=>projects.reduce((sum,{id})=>sum+levels[id]*(levels[id]+1)/2,0)
 
 export function newRailworks() {
@@ -50,7 +53,7 @@ function action(id,label,reason) {
 }
 
 export function railworksView(s) {
-  const {parts,blueprints}=s.workshop
+  const {parts,blueprints,generation}=s.workshop
   const {levels,cargo,repairUsed}=s.railworks
   const available=blueprints-invested(levels)
   const offers=projects.map(p=>{
@@ -60,18 +63,19 @@ export function railworksView(s) {
       action:action(p.id,full?'已完成':level?'升级':'安装',reason)}
   })
   const circuit=s.stops===STOPS.length
-  const index=circuit?8:s.stops
-  const cargoCost=40*3**index,repairCost=60*3**index
-  const baseFare=circuit?19:stationFares[index]
+  const baseFare=circuit?19:stationFares[s.stops]
   const circuitPremium=circuit?Math.max(0,blueprints-18):0
+  const cargoCost=circuit?Math.round(circuitParts*(1+circuitPremium/baseFare)):stationParts[s.stops]
+  const repairCost=Math.max(60,Math.round((circuit?circuitParts:cargoCost)*.85))
   const cargoFare=cargo?.tickets??(baseFare+circuitPremium)
   const lacking=cost=>parts>=cost?'':'还需 '+Math.ceil(cost-parts)+' 机件'
   const cargoReason=cargo?'本程已装运':lacking(cargoCost)
-  const repairReason=!s.trip?'发车后可快修':repairUsed?'本程已快修':lacking(repairCost)
+  const repairUnlocked=generation>=quickRepairGeneration
+  const repairReason=repairUsed?'本程已快修':!repairUnlocked?'工坊换代至第 '+quickRepairGeneration+' 代后解锁':!s.trip?'发车后可快修':lacking(repairCost)
   const percent=repairPercent(levels.arm)
   return {parts,blueprints,available,circuits:s.railworks.circuits,projects:offers,
     cargo:{cost:cargoCost,tickets:cargoFare,blueprintPremium:circuit?cargoFare-baseFare:0,loaded:!!cargo,action:action('cargo',cargo?'已装运':'装运备件',cargoReason)},
-    repair:{cost:repairCost,percent,saved:s.trip?savedSeconds(s.trip,percent/100):0,used:repairUsed,action:action('repair',repairUsed?'已快修':'行车快修',repairReason)}}
+    repair:{cost:repairCost,percent,saved:s.trip?savedSeconds(s.trip,percent/100):0,unlocked:repairUnlocked,used:repairUsed,action:action('repair',repairUsed?'已快修':'行车快修',repairReason)}}
 }
 
 export function runRailwork(s,id) {

@@ -1,8 +1,8 @@
-import { renderRailDispatch, renderRailEngineering } from './railworks-ui.mjs?v=4';
-import { renderWorkshopSummary, renderWorkshop } from './workshop-ui.mjs?v=4';
-import { advance, act, view } from './engine.mjs?v=4';
-import { renderPanel, renderOperations } from './panels.mjs?v=4';
-import { loadGame, saveGame, setupSettings } from './saves.mjs?v=4';
+import { renderRailDispatch, renderRailEngineering } from './railworks-ui.mjs?v=5';
+import { renderWorkshopSummary, renderWorkshop } from './workshop-ui.mjs?v=5';
+import { advance, act, view } from './engine.mjs?v=5';
+import { renderPanel, renderOperations } from './panels.mjs?v=5';
+import { loadGame, saveGame, setupSettings } from './saves.mjs?v=5';
 import { icon } from './icons.mjs?v=3';
 
 const $ = id => document.getElementById(id);

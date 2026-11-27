@@ -38,7 +38,7 @@ function workshop(s) { return view(s).workshop; }
 test('v2 migration retains the booked train and job; workshop starts at migration time', () => {
   const old = oldSave();
   const restored = restore(JSON.stringify(old), old.last);
-  assert.equal(restored.version, 4);
+  assert.equal(restored.version, 5);
   assert.deepEqual(restored.stock, old.stock);
   assert.deepEqual(restored.trip, old.trip);
   assert.deepEqual(restored.ops, old.ops);
@@ -67,7 +67,7 @@ test('v1 migration converts coal exactly once and initializes the same fresh wor
   };
   const first = restore(v1, start);
   const again = restore(JSON.stringify(first), start);
-  assert.equal(first.version, 4);
+  assert.equal(first.version, 5);
   assert.deepEqual(again.stock, stock(31*24,5,2));
   assert.deepEqual(again.trip.award, v1.trip.award);
   assert.equal(again.trip.left, v1.trip.left);
@@ -155,6 +155,27 @@ test('higher machines generate lower machines, and earned machines do not raise 
   compareWorkshop(restore(JSON.stringify(s),s.last),s);
 });
 
+test('v4 surplus parts and machinery stay on the books while only installed machines make parts', () => {
+  const old=newGame(start);
+  old.version=4;
+  const produced={lathe:1e7,assembly:1e6,line:1};
+  Object.assign(old.workshop,{parts:1e12,earned:1e12,lifetime:1e12,owned:produced,
+    purchased:{lathe:1,assembly:1,line:1},bestLathe:1});
+  const s=restore(old,start);
+  assert.equal(s.workshop.parts,old.workshop.parts);
+  const {perSecond}=workshop(s);
+  assert.equal(tier(s,'lathe').owned,produced.lathe);
+  assert.equal(tier(s,'lathe').running,57);
+  assert.equal(tier(s,'assembly').running,7);
+  assert.equal(tier(s,'assembly').perSecond,0);
+  advance(s,start+600_000);
+  similar(s.workshop.parts-old.workshop.parts,perSecond*600,'limited output');
+  assert.deepEqual(s.workshop.owned,produced);
+  action(s,tier(s,'line').actions['1']);
+  assert.equal(tier(s,'lathe').running,105);
+  assert.ok(workshop(s).perSecond>perSecond);
+});
+
 test('eight-hour offline production across arrival equals small online steps through the same station', () => {
   const s=newGame(start);
   installChain(s);
@@ -168,6 +189,7 @@ test('eight-hour offline production across arrival equals small online steps thr
   assert.equal(capped.stops,1);
   assert.equal(capped.trip,null);
   assert.equal(capped.offline.seconds,8*3600);
+  for(const id of ['lathe','assembly']) assert.equal(tier(capped,id).running,tier(capped,id).capacity);
   compareWorkshop(capped,online);
   for(const key of Object.keys(online.stock)) similar(capped.stock[key],online.stock[key],key);
   const again=restore(JSON.stringify(capped),capped.last);
@@ -177,7 +199,9 @@ test('eight-hour offline production across arrival equals small online steps thr
 
 test('prestige preserves railway progress, pays once, and applies capped bonuses to future trips', () => {
   const s=newGame(start);
-  // Budget this test's eight-hour windows through production, including the machine unlocks.
+  // A veteran workshop is one blueprint short of the maximum rail production bonus.
+  s.workshop.blueprints=9;
+  s.workshop.generation=10;
   installChain(s);
   advance(s,s.last+8*hour);
   action(s,tier(s,'lathe').actions.max);
@@ -227,5 +251,5 @@ test('prestige preserves railway progress, pays once, and applies capped bonuses
   const etaCap=Math.min(15,w.blueprints*2.5);
   similar(future.speedBonus-baseline.speedBonus,etaCap,'future speed percentage');
   assert.ok(future.total<baseline.total);
-  assert.equal(baseRoute.total,booked.total);
+  assert.ok(baseRoute.total>booked.total);
 });

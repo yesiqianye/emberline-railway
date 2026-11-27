@@ -1,5 +1,5 @@
 import { icon } from './icons.mjs?v=3';
-import { actionButton, escapeHTML as esc, formatWorkshopNumber as format } from './workshop-ui.mjs?v=4';
+import { actionButton, escapeHTML as esc, formatWorkshopNumber as format } from './workshop-ui.mjs?v=5';
 
 const exact = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 3 });
 
@@ -17,18 +17,19 @@ export function renderRailDispatch(v) {
   const premium = cargo.blueprintPremium ? ' 报价含蓝图加价 ' + format(cargo.blueprintPremium) + ' 运票。' : '';
   const timeStatus = repair.used ? '本程已快修，到下一站后补充检修机会。'
     : '每程可用一次，按发车时全程的 ' + format(repair.percent) + '% 抵扣剩余时间。';
-  const saving = v.leg.traveling && !repair.used && repair.saved > 0
+  const saving = v.leg.traveling && repair.unlocked && repair.saved > 0
     ? '本次提前 ' + exact.format(repair.saved) + ' 秒' : '全程的 ' + format(repair.percent) + '%';
+  const cost = offer => '<span>' + exact.format(offer.cost) + ' 机件</span>' + icon('arrow');
   return '<section id="rail-dispatch" tabindex="-1" class="ws ws-card rw-panel rw-dispatch" aria-labelledby="rw-dispatch-title">' +
     '<header class="ws-head"><h2 id="rw-dispatch-title">' + icon('cargo') + '随车备件</h2><a href="#workshop">工坊库存 ' +
     format(Math.floor(parts)) + ' 机件' + icon('arrow') + '</a></header><div class="rw-choices">' +
-    '<article class="rw-choice"><h3>' + icon('ticket') + '备件托运</h3><div class="rw-trade"><span>' +
-    exact.format(cargo.cost) + ' 机件</span>' + icon('arrow') + '<strong>到站 +' + exact.format(cargo.tickets) +
+    '<article class="rw-choice"><h3>' + icon('ticket') + '备件托运</h3><div class="rw-trade">' +
+    (cargo.loaded ? '' : cost(cargo)) + '<strong>到站 +' + exact.format(cargo.tickets) +
     ' 运票</strong></div><p>' + cargoStatus + premium + '</p>' + actionRow(cargo.action,cargo.loaded ? '本程已装车' : '装运备件',
       cargo.loaded ? '本程已装车' : '装运备件，花费 ' + cargo.cost + ' 机件，到站加收 ' + cargo.tickets + ' 运票',cargo.loaded) +
-    '</article><article class="rw-choice"><h3>' + icon('clock') + '行车快修</h3><div class="rw-trade"><span>' +
-    exact.format(repair.cost) + ' 机件</span>' + icon('arrow') + '<strong>' + saving + '</strong></div><p>' +
-    timeStatus + '</p>' + actionRow(repair.action,repair.used ? '本程已快修' : '执行快修',
+    '</article><article class="rw-choice"><h3>' + icon('clock') + '行车快修</h3>' +
+    (repair.used ? '' : '<div class="rw-trade">' + cost(repair) + '<strong>' + saving + '</strong></div>') +
+    '<p>' + timeStatus + '</p>' + actionRow(repair.action,repair.used ? '本程已快修' : '执行快修',
       repair.used ? '本程已快修' : '执行快修，花费 ' + repair.cost + ' 机件',repair.used) + '</article></div></section>';
 }
 
