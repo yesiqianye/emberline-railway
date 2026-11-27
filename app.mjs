@@ -1,10 +1,11 @@
-import { advance, act, view } from './engine.mjs?v=2';
+import { renderWorkshopSummary, renderWorkshop } from './workshop-ui.mjs?v=3';
+import { advance, act, view } from './engine.mjs?v=3';
 import { renderPanel, renderOperations } from './panels.mjs?v=2';
-import { loadGame, saveGame, setupSettings } from './saves.mjs?v=2';
-import { icon } from './icons.mjs';
+import { loadGame, saveGame, setupSettings } from './saves.mjs?v=3';
+import { icon } from './icons.mjs?v=3';
 
 const $ = id => document.getElementById(id);
-const labels = {cab:['驾驶台','机车驾驶台','gauge'],map:['线路图','全线线路图','map'],garage:['车库','机车车库','garage'],freight:['货运站','货运调度站','cargo']};
+const labels = {cab:['驾驶台','机车驾驶台','gauge'],workshop:['工坊','车载工坊','workshop'],map:['线路图','全线线路图','map'],garage:['车库','机车车库','garage'],freight:['货运站','货运调度站','cargo']};
 const names = {coal:'煤炭',steel:'钢材',tickets:'运票'};
 const chapters = ['第一章','第二章','第三章','第四章'];
 const fmt = new Intl.NumberFormat('zh-CN',{maximumFractionDigits:0});
@@ -13,6 +14,7 @@ let state = loadGame();
 let tab = '';
 let lastNoticeKey = '';
 let timer, lastSave = 0;
+const workshopOptions = {quantity:'1', confirmPrestige:false};
 const time = (s,hours=false) => {
   s=Math.max(0,Math.floor(s));
   const parts = hours?[Math.floor(s/3600),Math.floor(s%3600/60),s%60]:[Math.floor(s/60),s%60];
@@ -30,7 +32,7 @@ function persist() {
   $('save-status').lastChild.textContent=good?'自动存档':'待备份';
   lastSave=Date.now();
 }
-const settings = setupSettings({getState:()=>state,replaceState(next){state=next;render();},notify});
+const settings = setupSettings({getState:()=>state,replaceState(next){state=next;workshopOptions.confirmPrestige=false;render();},notify});
 function html(node,value) { if(node.previousValue!==value){node.innerHTML=value;node.previousValue=value;} }
 function text(node,value) {if(node.textContent!==value)node.textContent=value;}
 // Keep live controls mounted while countdowns, costs and balances are refreshed.
@@ -78,6 +80,7 @@ $('nav').innerHTML=Object.entries(labels).map(([key,[label,,symbol]])=>'<button 
 $('settings').innerHTML=icon('settings');$('clock-symbol').innerHTML=icon('clock');
 $('resources').innerHTML=Object.entries(names).map(([k,n])=>'<div class="res res-'+k+'"><span class="res-icon">'+icon(k==='tickets'?'ticket':k)+'</span><span><span class="res-name">'+n+'</span><span class="res-rate" id="rate-'+k+'"></span></span><strong class="res-val" id="value-'+k+'"></strong></div>').join('');
 const cab = `
+  <div id="cab-workshop"></div>
   <div class="dashboard">
     <div class="cab-column">
       <section class="cab-card">
@@ -151,6 +154,7 @@ function focusOperations() {
 }
 function showCab(v, notice) {
   const {leg,finished,station,region,objective}=v;
+  liveHTML($('cab-workshop'), renderWorkshopSummary(v));
   const scene='./art/region-'+(region.index+1)+'.webp';
   if($('scene-img').getAttribute('src')!==scene){$('scene-img').src=scene;$('scene-img').alt=region.name+'铁路风景';}
   text($('train-state'),finished?'全线通车':leg.traveling?'区间运行':'站内整备');
@@ -168,7 +172,7 @@ function showCab(v, notice) {
   depart.title=v.actions.depart.reason || '备齐物资，驶向下一站';
   text($('goal'),finished?'曙光灯塔已点亮':objective.title);
   let description=objective.description;
-  if(v.elapsed<75 && !leg.traveling && !leg.stopsDone)description+=' 钢材由工坊自动生产。';
+  if(v.elapsed<75 && !leg.traveling && !leg.stopsDone)description+=' 钢材会自动入库，备齐即可发车。';
   text($('goal-desc'),description);
   $('goal-alert').hidden = !notice;
   if (notice) {
@@ -188,6 +192,8 @@ function render() {
   const target=navFromURL();
   if(target!==tab) {
     tab=target;
+    workshopOptions.confirmPrestige=false;
+    $('resources').hidden=tab==='workshop';
     $('content').previousValue = null;
     $('nav').querySelectorAll('button').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
     text($('heading'),labels[tab][1]);
@@ -202,7 +208,9 @@ function render() {
   syncSound();
   const notice = pendingNotice(v);
   showNotices(notice);
-  if(tab==='cab')showCab(v, notice);else liveHTML($('content'), renderPanel(tab,v));
+  if(tab==='cab') showCab(v, notice);
+  else if(tab==='workshop') liveHTML($('content'),renderWorkshop(v,workshopOptions));
+  else liveHTML($('content'),renderPanel(tab,v));
 }
 function update() {advance(state);render();if(Date.now()-lastSave>=5000)persist();}
 window.addEventListener('hashchange',()=>{render();window.scrollTo(0,0);});
@@ -217,8 +225,23 @@ document.addEventListener('click',e=>{
     else location.hash=b.dataset.tab;
     return;
   }
+  if (b.hasAttribute('data-workshop-quantity')) {
+    workshopOptions.quantity=b.dataset.workshopQuantity;
+    render();
+    return;
+  }
+  if (b.hasAttribute('data-workshop-confirm')) {
+    workshopOptions.confirmPrestige=b.dataset.workshopConfirm==='open';
+    render();
+    document.querySelector(workshopOptions.confirmPrestige?'[data-workshop-confirm="cancel"]':'[data-workshop-confirm="open"]')?.focus({preventScroll:true});
+    return;
+  }
   if(b.dataset.action){
     const type=b.dataset.action;
+    if(type==='workshop' && b.dataset.id==='prestige') {
+      if(!workshopOptions.confirmPrestige) return;
+      workshopOptions.confirmPrestige=false;
+    }
     const result=act(state,type,b.dataset.id);
     if(result.ok){settings.play(type);persist();}
     notify(result.message);render();
@@ -228,5 +251,5 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){advance(st
 window.addEventListener('pagehide',()=>{advance(state);persist();});
 render();persist();
 const off=view(state).offline;
-if(off?.seconds>=60)notify('离线调度 '+Math.floor(off.seconds/60)+' 分钟，收回 '+Math.floor(off.coal)+' 煤炭、'+Math.floor(off.steel)+' 钢材、'+Math.floor(off.tickets)+' 运票。');
+if(off?.seconds>=60)notify('离线调度 '+Math.floor(off.seconds/60)+' 分钟，收回 '+Math.floor(off.coal)+' 煤炭、'+Math.floor(off.steel)+' 钢材、'+Math.floor(off.tickets)+' 运票'+(off.parts>=1?'，工坊生产 '+fmt.format(Math.floor(off.parts))+' 机件。':'。'));
 setInterval(()=>{if(!document.hidden)update();},500);

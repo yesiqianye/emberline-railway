@@ -1,3 +1,4 @@
+import { newWorkshop, restoreWorkshop, advanceWorkshop, workshopView, workshopAction, industryMultiplier } from './workshop.mjs?v=3'
 import { newOperations, restoreOperations, operationsView, runOperation } from './operations.mjs?v=2'
 import { REGIONS, DEPOT, STOPS, GOODS, ROUTE_FUEL, ROUTE_VALUE, UPG, CARS, LINES, INCIDENTS } from './data.mjs?v=2'
 
@@ -17,7 +18,7 @@ const phases = [.23,.51,.77]
 
 export function newGame(now=Date.now()) {
   return {
-    version:2,last:now,elapsed:0,stock:{coal:18,steel:6,tickets:0},stops:0,track:'fast',trip:null,
+    version:3,workshop:newWorkshop(),last:now,elapsed:0,stock:{coal:18,steel:6,tickets:0},stops:0,track:'fast',trip:null,
     upgrades:Object.fromEntries(UPG.map(x=>[x.id,0])),cars:['tender'],
     freights:Object.fromEntries(LINES.map(x=>[x.id,0])),orders:[],shovelAuto:true,shovelCycleMs:0,ops:newOperations(),
     log:[{time:now,text:'余烬机务段重新开炉。凑齐出发物资，让第一班列车开往煤灰小站。',kind:'info'}],
@@ -48,7 +49,7 @@ function orderCount(s,category) {
 function scoop(s) {
   const base=6+3*s.upgrades.shovel
   const tender=equipped(s,'tender')?1.3:1
-  return Math.round(base*tender*(1+.05*orderCount(s,0))*1000)/1000
+  return Math.round(base*tender*(1+.05*orderCount(s,0))*industryMultiplier(s.workshop)*1000)/1000
 }
 function passiveRates(s) {
   const u=s.upgrades
@@ -60,17 +61,19 @@ function passiveRates(s) {
     const level=s.freights[line.id]
     if(level) goods.forEach((k,i)=>{r[k]+=line.rate[i]*level*(1+.15*u.yard)})
   }
-  r.coal*=1+.05*orderCount(s,0)
-  r.steel*=1+.05*orderCount(s,1)
+  const industrial=industryMultiplier(s.workshop)
+  r.coal*=(1+.05*orderCount(s,0))*industrial
+  r.steel*=(1+.05*orderCount(s,1))*industrial
   return r
 }
 function basketValue(basket) {
   return goods.reduce((sum,k)=>sum+basket[k]*ROUTE_VALUE[k],0)
 }
+const blueprintSpeedPercent = blueprints => Math.min(15, blueprints*2.5)
 function travelTerms(s,track) {
   const stop=target(s)
   const traction=equipped(s,'traction')?(stop.regionIndex===1?.15:.05):0
-  const speedBonus=.035*s.upgrades.boiler+traction+.0125*orderCount(s,2)
+  const speedBonus=.035*s.upgrades.boiler+traction+.0125*orderCount(s,2)+blueprintSpeedPercent(s.workshop.blueprints)/100
   const directTime=Math.round(stop.min*60/(1+speedBonus))
   const price=fromArray([ROUTE_FUEL[stop.index],stop.steel,0])
   const load=equipped(s,'cargo')?1.45:1
@@ -97,8 +100,9 @@ function travelTerms(s,track) {
   return {price,total,award,speedBonus:speedBonus*100}
 }
 
-function produce(s,millis) {
+function produce(s,millis,includeWorkshop) {
   if(millis<=0) return
+  if(includeWorkshop) advanceWorkshop(s.workshop,millis/1000,s.stops)
   credit(s,passiveRates(s),millis/1000)
   const accumulated=s.shovelCycleMs+millis
   if(s.shovelAuto) {
@@ -120,18 +124,22 @@ function arrive(s,time) {
 }
 
 export function advance(s,now=Date.now()) {
+  return settleElapsed(s,now,true)
+}
+
+function settleElapsed(s,now,includeWorkshop) {
   if(!Number.isFinite(now) || now<=s.last) return s
   let millis=Math.min(now-s.last,8*HOUR)
   s.elapsed+=millis/1000
   if(s.trip) {
     const leftMs=Math.round(s.trip.left*1000)
     const moving=Math.min(millis,leftMs)
-    produce(s,moving)
+    produce(s,moving,includeWorkshop)
     s.trip.left=(leftMs-moving)/1000
     millis-=moving
     if(s.trip.left===0) arrive(s,s.last+moving)
   }
-  produce(s,millis)
+  produce(s,millis,includeWorkshop)
   s.last=now
   return s
 }
@@ -243,7 +251,10 @@ function makeView(s) {
   const left=s.trip?.left??(done?0:total)
   const progress=done?1:moving?1-left/total:0
   const distance=moving?current.km+(stop.km-current.km)*progress:current.km
-  return {resources:{...s.stock},rates,autoStoke,operations:operationsView(s),priorityPass:priorityService(s),region,station:current,regions:REGIONS,stations:STOPS.map(x=>({...x,status:x.index===s.stops-1?'current':x.index<s.stops?'done':x.index===s.stops?'next':'locked'})),
+  const workshop=workshopView(s.workshop,s.stops)
+  workshop.trainSpeedPercent=blueprintSpeedPercent(workshop.blueprints)
+  workshop.prestige.trainSpeedPercentAfter=blueprintSpeedPercent(workshop.blueprints+workshop.prestige.gain)
+  return {resources:{...s.stock},workshop,rates,autoStoke,operations:operationsView(s),priorityPass:priorityService(s),region,station:current,regions:REGIONS,stations:STOPS.map(x=>({...x,status:x.index===s.stops-1?'current':x.index<s.stops?'done':x.index===s.stops?'next':'locked'})),
     leg:{index:stop.index,name:route.name,description:stop.description,progress,remaining:left,total,destination:stop.name,traveling:moving,ready:depart.enabled,route:s.track,stopsDone:s.stops,cost:route.cost,award:s.trip?.award??route.award},
     objective,actions:{stoke,depart,toggleStoke},upgrades,cars,freights,routes,contracts,log:s.log,finished:done,elapsed:s.elapsed,slots:slots(s),distance,offline:s.offline,stokeAmount:amount}
 }
@@ -251,6 +262,11 @@ export const view=makeView
 
 export function act(s,type,id=null,now=Date.now()) {
   advance(s,now)
+  if(type==='workshop') {
+    const result=workshopAction(s.workshop,s.stops,id)
+    if(result.ok && id==='prestige') addLog(s,'upgrade',result.message)
+    return result
+  }
   if(type==='operation') {
     const result=runOperation(s,id)
     if(result.ok) addLog(s,'contract',result.message)
@@ -336,7 +352,7 @@ function cleanLog(log) {
 export function restore(raw,now=Date.now()) {
   const x=typeof raw==='string'?JSON.parse(raw):raw
   const fail=()=>{throw new Error('存档格式无效或版本不受支持。')}
-  if(!record(x)||![1,2].includes(x.version)||!int(x.stops,0,STOPS.length)||!finite(x.last,0,9e15)||!finite(x.elapsed)||!validStock(x.stock)||!['fast','haul'].includes(x.track)) fail()
+  if(!record(x)||![1,2,3].includes(x.version)||!int(x.stops,0,STOPS.length)||!finite(x.last,0,9e15)||!finite(x.elapsed)||!validStock(x.stock)||!['fast','haul'].includes(x.track)) fail()
   if(!validLevels(x.upgrades,UPG,d=>d.max)||!validLevels(x.freights,LINES,()=>3)) fail()
   if(!Array.isArray(x.cars)||x.cars.length>slots(x)||new Set(x.cars).size!==x.cars.length||!x.cars.every(id=>CARS.some(c=>c.id===id && c.from<=x.stops))) fail()
   if(!Array.isArray(x.orders)||x.orders.length>STOPS.length||new Set(x.orders).size!==x.orders.length||!x.orders.every(i=>int(i,0,x.stops-1))) fail()
@@ -346,6 +362,10 @@ export function restore(raw,now=Date.now()) {
   if(!legacy && (typeof x.shovelAuto!=='boolean' || !finite(x.shovelCycleMs,0,SHOVEL_MS) || (x.shovelAuto && x.shovelCycleMs===SHOVEL_MS) || !record(x.ops))) fail()
   if(t && !legacy && (!validStock(t.price)||!finite(t.speedBonus,0,200) || (t.priorityUsed!==undefined && typeof t.priorityUsed!=='boolean'))) fail()
   const s=newGame(now)
+  if(x.version===3) {
+    if(!record(x.workshop)) fail()
+    s.workshop=restoreWorkshop(x.workshop)
+  }
   Object.assign(s,{last:Math.min(x.last,now),elapsed:x.elapsed,stops:x.stops,track:x.track,cars:[...x.cars],orders:[...x.orders],log:cleanLog(x.log),shovelAuto:legacy?true:x.shovelAuto,shovelCycleMs:legacy?0:x.shovelCycleMs,ops:legacy?newOperations():restoreOperations(x.ops)})
   for(const k of goods) s.stock[k]=x.stock[k]
   for(const u of UPG) s.upgrades[u.id]=x.upgrades[u.id]
@@ -364,7 +384,9 @@ export function restore(raw,now=Date.now()) {
   }
   const dt=Math.max(0,Math.min(now-s.last,8*HOUR))/1000
   const before={...s.stock}
-  advance(s,now)
-  if(dt>=60) s.offline={seconds:dt,...Object.fromEntries(goods.map(k=>[k,s.stock[k]-before[k]]))}
+  const partsBefore=s.workshop.parts
+  // Legacy absences belong to the railway. Its new workshop opens at migration time.
+  settleElapsed(s,now,x.version===3)
+  if(dt>=60) s.offline={seconds:dt,parts:s.workshop.parts-partsBefore,...Object.fromEntries(goods.map(k=>[k,s.stock[k]-before[k]]))}
   return s
 }

@@ -47,3 +47,11 @@
   .res-val {font-size:clamp(15px,4.9vw,23px);overflow-wrap:anywhere}
   #cab-operations:not(:empty) {margin-top:12px}
 }
+
+#cab-workshop {margin-bottom:16px}
+.resources[hidden] {display:none}
+@media (max-width:450px) {
+  .nav .nav-inner {display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+  .nav button {gap:4px;padding:10px 1px;font-size:12px}
+  .nav button svg {width:14px}
+}

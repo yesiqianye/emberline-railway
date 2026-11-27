@@ -1,4 +1,5 @@
 const shapes = {
+ workshop:'<path d="M3 20V9l6 3V7l6 3V5h4l2 15zM7 16h1m4 0h1m4 0h1"/>',
  gauge:'<path d="M3 18a10 10 0 1 1 18 0Z"/><path d="m12 14 5-6M5 13h2m1-6 1.5 2M12 4v2"/>',
  map:'<circle cx="5" cy="17" r="2"/><circle cx="19" cy="5" r="2"/><path d="M5 15v-3a3 3 0 0 1 3-3h8a3 3 0 0 0 3-3"/>',
  garage:'<path d="m2 8 10-5 10 5M4 8v13h16V8M8 20V11h8v9m-8-6h8m-8 3h8"/>',
