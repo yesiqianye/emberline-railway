@@ -65,9 +65,10 @@ function market(s) {
 const pairings = [[0,1],[2,3],[1,2],[0,3]]
 
 function assignments(s) {
+  const stop=Math.min(s.stops,STOPS.length-1)
   const {serial}=s.ops
   return pairings[(s.stops+serial)%pairings.length].map(kind=>{
-    const job=terms(s.stops,kind)
+    const job=terms(stop,kind)
     const info=describe(job.cost)+' · '+job.duration+' 秒 · 结算选 '+job.steel+' 钢材或 '+job.tickets+' 运票'
     return option(s,'assign','assign-'+s.stops+'-'+serial+'-'+kind, job.name,job.description,info,job.cost,blankCost(),{jobKind:kind})
   })
@@ -139,9 +140,10 @@ export function runOperation(s,id) {
   let message
   for(const key of Object.keys(GOODS)) s.stock[key]+=action.gain[key]-action.cost[key]
   if(action.kind==='assign') {
-    const spec=terms(s.stops,action.jobKind)
+    const stop=Math.min(s.stops,STOPS.length-1)
+    const spec=terms(stop,action.jobKind)
     s.ops.serial++
-    s.ops.job={kind:action.jobKind,stop:s.stops,startedAt:s.elapsed,due:s.elapsed+spec.duration,checked:null,crew:false}
+    s.ops.job={kind:action.jobKind,stop,startedAt:s.elapsed,due:s.elapsed+spec.duration,checked:null,crew:false}
     message='已安排「'+spec.name+'」，预计 '+spec.duration+' 秒完工。'
   } else if(action.kind==='check') {
     job.checked=manifest(s).options[action.choice].correct

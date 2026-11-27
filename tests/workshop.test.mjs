@@ -38,7 +38,7 @@ function workshop(s) { return view(s).workshop; }
 test('v2 migration retains the booked train and job; workshop starts at migration time', () => {
   const old = oldSave();
   const restored = restore(JSON.stringify(old), old.last);
-  assert.equal(restored.version, 3);
+  assert.equal(restored.version, 4);
   assert.deepEqual(restored.stock, old.stock);
   assert.deepEqual(restored.trip, old.trip);
   assert.deepEqual(restored.ops, old.ops);
@@ -67,7 +67,7 @@ test('v1 migration converts coal exactly once and initializes the same fresh wor
   };
   const first = restore(v1, start);
   const again = restore(JSON.stringify(first), start);
-  assert.equal(first.version, 3);
+  assert.equal(first.version, 4);
   assert.deepEqual(again.stock, stock(31*24,5,2));
   assert.deepEqual(again.trip.award, v1.trip.award);
   assert.equal(again.trip.left, v1.trip.left);

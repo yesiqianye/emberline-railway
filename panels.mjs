@@ -77,7 +77,11 @@ function routeDifference(route, other) {
 
 function routeCard(route, other, moving) {
   const assigned = moving && route.selected;
-  const note = moving ? '发车时锁定的区间计划' : routeDifference(route, other);
+  const note = moving ? '基础运价已在发车时锁定' : routeDifference(route, other);
+  const effects = [];
+  if (route.savings?.coal) effects.push('喷嘴节省 ' + numbers.format(route.savings.coal) + ' 煤炭');
+  if (route.savings?.tickets) effects.push('货架增收 ' + numbers.format(route.savings.tickets) + ' 运票');
+  if (route.cargoTickets) effects.push('备件托运 +' + numbers.format(route.cargoTickets) + ' 运票');
   return '<div class="erp-fork ' + (route.selected ? 'is-picked' : '') + '">' +
     '<div><span class="erp-letter">' + (route.id === 'fast' ? 'A' : 'B') + '</span><strong>' + escape(route.name) +
     '</strong><span class="erp-hnote">' + (route.id === 'fast' ? '正线' : '货运支线') + '</span></div>' +
@@ -86,6 +90,7 @@ function routeCard(route, other, moving) {
     (route.speedBonus ? '<span class="erp-speed">车速 +' + numbers.format(route.speedBonus) + '%</span>' : '') +
     '</dd><dt>发车物资</dt><dd>' + costLine(route.cost) + '</dd><dt>到站收获</dt><dd>' + costLine(route.award) +
     '</dd><dt>每分净得</dt><dd class="erp-net">' + routeEconomy(route) + '</dd></dl>' +
+    (effects.length ? '<p class="erp-maprule">本程已计入 · ' + escape(effects.join('，')) + '</p>' : '') +
     '<div class="erp-fork-bottom"><small class="erp-delta">' + escape(note) + '</small>' +
     actionButton(route.action, '', assigned ? '行驶中' : route.selected ? '已选路线' : undefined) + '</div></div>';
 }
@@ -102,19 +107,14 @@ function mapPanel(v) {
         '<span class="erp-stop-node">' + (s.status === 'done' ? icon('check') : '') + '</span><div><strong>' + escape(s.name) + '</strong>' +
         '<small>' + escape(numbers.format(s.km)) + ' km' + (s.status === 'current' ? ' · 当前站' : s.status === 'next' ? ' · 下一站' : '') + '</small></div></li>').join('') + '</ol></section>';
   }).join('');
-  let dispatch = '';
-  if (v.finished) {
-    dispatch = '<section class="erp-box erp-ending">' + icon('flag') + '<div><h3>全线贯通</h3><p>列车已抵达终点。沿线车站继续运转，你可以返回车库调整编组，也可以继续经营货运线。</p></div></section>';
-  } else {
-    const progress = Math.min(100, Math.max(0, (leg.progress || 0) * 100));
-    dispatch = '<section class="erp-box">' + title('junction', '区间调度', leg.traveling ? '行车中' : '停站中') +
-      '<div class="erp-trip"><div><h4>' + escape(v.station.name) + '<span class="erp-track-arrow" aria-hidden="true">→</span>' + escape(leg.destination) + '</h4>' +
-      '<p>' + escape(leg.description) + '</p>' + (!leg.traveling && !v.actions.depart.enabled ? '<small class="erp-depart-reason">' + escape(v.actions.depart.reason) + '</small>':'') + '</div>' + actionButton(v.actions.depart, 'erp-primary') + '</div>' +
-      (leg.traveling ? '<div class="erp-journey"><div><span>' + escape(selectedRoute?.name || '行驶进度') + '</span><span>' + Math.floor(progress) + '%</span></div><progress max="100" value="' + progress + '"></progress></div>' : '') +
-      '<div class="erp-forks' + (leg.traveling ? ' erp-enroute' : '') + '">' +
-      (leg.traveling ? routes.filter(r => r.selected) : routes).map(r => routeCard(r, routes.find(other => other.id !== r.id), leg.traveling)).join('') +
-      '</div><p class="erp-economy-note">每分净得按到站收获减去发车物资，再除以计划时长计算。</p>'  + '</section>';
-  }
+  const progress = Math.min(100, Math.max(0, (leg.progress || 0) * 100));
+  const dispatch = '<section class="erp-box">' + title('junction', leg.circuit ? '海湾环运班列' : '区间调度', leg.circuit ? '全线贯通 · 已完成 ' + v.railworks.circuits + ' 班' : leg.traveling ? '行车中' : '停站中') +
+    '<div class="erp-trip"><div><h4>' + escape(v.station.name) + '<span class="erp-track-arrow" aria-hidden="true">→</span>' + (leg.circuit ? '海湾沿岸 → ' : '') + escape(leg.destination) + '</h4>' +
+    '<p>' + escape(leg.description) + '</p>' + (!leg.traveling && !v.actions.depart.enabled ? '<small class="erp-depart-reason">' + escape(v.actions.depart.reason) + '</small>':'') + '</div>' + actionButton(v.actions.depart, 'erp-primary') + '</div>' +
+    (leg.traveling ? '<div class="erp-journey"><div><span>' + escape(selectedRoute?.name || '行驶进度') + '</span><span>' + Math.floor(progress) + '%</span></div><progress max="100" value="' + progress + '"></progress></div>' : '') +
+    '<div class="erp-forks' + (leg.traveling ? ' erp-enroute' : '') + '">' +
+    (leg.traveling ? routes.filter(r => r.selected) : routes).map(r => routeCard(r, routes.find(other => other.id !== r.id), leg.traveling)).join('') +
+    '</div><p class="erp-economy-note">每分净得按到站收获减去发车物资，再除以计划时长计算。</p>'  + '</section>';
   return '<div class="erp">' + dispatch + '<section class="erp-box">' + title('track','全线站点', arrived + ' / ' + stations.length + ' 站') + '<p class="erp-maprule">' + escape(v.region.rule) + '</p><div class="erp-map">' + regionMap + '</div></section></div>';
 }
 

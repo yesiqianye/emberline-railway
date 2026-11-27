@@ -1,7 +1,8 @@
-import { renderWorkshopSummary, renderWorkshop } from './workshop-ui.mjs?v=3';
-import { advance, act, view } from './engine.mjs?v=3';
-import { renderPanel, renderOperations } from './panels.mjs?v=2';
-import { loadGame, saveGame, setupSettings } from './saves.mjs?v=3';
+import { renderRailDispatch, renderRailEngineering } from './railworks-ui.mjs?v=4';
+import { renderWorkshopSummary, renderWorkshop } from './workshop-ui.mjs?v=4';
+import { advance, act, view } from './engine.mjs?v=4';
+import { renderPanel, renderOperations } from './panels.mjs?v=4';
+import { loadGame, saveGame, setupSettings } from './saves.mjs?v=4';
 import { icon } from './icons.mjs?v=3';
 
 const $ = id => document.getElementById(id);
@@ -13,6 +14,7 @@ const safety = value => String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;
 let state = loadGame();
 let tab = '';
 let lastNoticeKey = '';
+let nextSection = '';
 let timer, lastSave = 0;
 const workshopOptions = {quantity:'1', confirmPrestige:false};
 const time = (s,hours=false) => {
@@ -106,6 +108,7 @@ const cab = `
           </div>
         </div>
       </section>
+      <div id="cab-railworks"></div>
       <div id="cab-operations"></div>
     </div>
     <aside class="side">
@@ -157,12 +160,12 @@ function showCab(v, notice) {
   liveHTML($('cab-workshop'), renderWorkshopSummary(v));
   const scene='./art/region-'+(region.index+1)+'.webp';
   if($('scene-img').getAttribute('src')!==scene){$('scene-img').src=scene;$('scene-img').alt=region.name+'铁路风景';}
-  text($('train-state'),finished?'全线通车':leg.traveling?'区间运行':'站内整备');
+  text($('train-state'),leg.traveling?(leg.circuit?'环运班列运行中':'区间运行'):finished?'全线通车':'站内整备');
   text($('location-type'),leg.traveling?'当前区间':'当前位置');
   text($('site-name'),leg.traveling?leg.name:station.name);
-  text($('site-desc'),leg.traveling?leg.description:station.description);
-  html($('next'),finished?'终点站 · <b>曙光总站</b>':(leg.traveling?'即将抵达':'下一站')+'　<b>'+safety(leg.destination)+'</b>');
-  text($('distance'),leg.traveling?'剩余 '+time(Math.ceil(leg.remaining)):Math.floor(v.distance)+' / '+v.stations.at(-1).km+' km');
+  text($('site-desc'),leg.traveling || leg.circuit?leg.description:station.description);
+  html($('next'),leg.circuit?'海湾环运 · <b>曙光总站往返</b>':(leg.traveling?'即将抵达':'下一站')+'　<b>'+safety(leg.destination)+'</b>');
+  text($('distance'),leg.traveling?'剩余 '+time(Math.ceil(leg.remaining)):leg.circuit?'已完成 '+v.railworks.circuits+' 班':Math.floor(v.distance)+' / '+v.stations.at(-1).km+' km');
   $('progress').hidden=!leg.traveling;
   if(leg.traveling)$('progress').firstChild.style.width=leg.progress*100+'%';
   showStoker(v);
@@ -170,7 +173,7 @@ function showCab(v, notice) {
   text($('depart-text'),v.actions.depart.label);
   depart.disabled=!v.actions.depart.enabled;
   depart.title=v.actions.depart.reason || '备齐物资，驶向下一站';
-  text($('goal'),finished?'曙光灯塔已点亮':objective.title);
+  text($('goal'),objective.title);
   let description=objective.description;
   if(v.elapsed<75 && !leg.traveling && !leg.stopsDone)description+=' 钢材会自动入库，备齐即可发车。';
   text($('goal-desc'),description);
@@ -178,9 +181,9 @@ function showCab(v, notice) {
   if (notice) {
     html($('goal-link'), '<button class="text-btn" type="button" data-focus-operations>' + notice.action + icon('arrow') + '</button>');
   } else {
-    const linkTab = finished ? 'freight' : 'map';
-    html($('goal-link'), '<a class="text-btn" href="#' + linkTab + '">' + (finished ? '查看剩余委托' : '查看线路') + icon('arrow') + '</a>');
+    html($('goal-link'), '<a class="text-btn" href="#map">' + (leg.circuit ? '查看环运线路' : '查看线路') + icon('arrow') + '</a>');
   }
+  liveHTML($('cab-railworks'), renderRailDispatch(v));
   liveHTML($('cab-operations'), renderOperations(v,{compact:true}));
   const start=region.index*3;
   const prior=start===0?{name:'余烬机务段',km:0,status:leg.stopsDone===0?'current':'done'}:v.stations[start-1];
@@ -210,11 +213,31 @@ function render() {
   showNotices(notice);
   if(tab==='cab') showCab(v, notice);
   else if(tab==='workshop') liveHTML($('content'),renderWorkshop(v,workshopOptions));
+  else if(tab==='garage') liveHTML($('content'),renderRailEngineering(v)+renderPanel(tab,v));
   else liveHTML($('content'),renderPanel(tab,v));
 }
 function update() {advance(state);render();if(Date.now()-lastSave>=5000)persist();}
-window.addEventListener('hashchange',()=>{render();window.scrollTo(0,0);});
+function focusRailSection(id) {
+  const section = document.getElementById(id);
+  if (!section) return;
+  section.focus({preventScroll:true});
+  section.scrollIntoView({block:'start'});
+}
+window.addEventListener('hashchange',()=>{
+  render();
+  if(nextSection) focusRailSection(nextSection);
+  else window.scrollTo(0,0);
+  nextSection='';
+});
 document.addEventListener('click',e=>{
+  const link = e.target.closest('a[data-rail-focus]');
+  if(link && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+    if(link.hash === location.hash) {
+      e.preventDefault();
+      focusRailSection(link.dataset.railFocus);
+    } else nextSection = link.dataset.railFocus;
+    return;
+  }
   const b=e.target.closest('button');
   if(!b||b.disabled)return;
   if(b.id==='settings'){settings.open();return;}
